@@ -9,6 +9,11 @@ const nextConfig: NextConfig = {
   // requests; when a stale client hits a new deployment, it does a full reload
   // instead of throwing "Failed to find Server Action".
   deploymentId: process.env.DEPLOYMENT_ID,
+  experimental: {
+    serverActions: {
+      allowedOrigins: ["hypamail.me", "*.hypamail.me"],
+    },
+  },
 };
 
 export default nextConfig;
