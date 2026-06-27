@@ -17,19 +17,12 @@ export default async function Home() {
       }}
     >
       <div style={{ maxWidth: 560 }}>
-        <div
-          style={{
-            display: "inline-block",
-            fontSize: "12px",
-            color: "#878787",
-            border: "1px solid #1f1f1f",
-            background: "#080808",
-            padding: "4px 10px",
-            marginBottom: "1.5rem",
-          }}
-        >
-          in development · not for public use yet
-        </div>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="https://r2.hypastack.com/cdn/fepvmb5y0u31/hypamail.webp"
+          alt="hypamail"
+          style={{ height: 80, width: "auto", margin: "0 auto 1.5rem", display: "block" }}
+        />
         <h1 style={{ fontSize: "2.5rem", margin: "0 0 1rem", lineHeight: 1.1, fontWeight: 700 }}>
           your own private inbox
         </h1>
@@ -39,10 +32,10 @@ export default async function Home() {
           we&apos;re building it.
         </p>
         <div style={{ display: "flex", gap: "0.6rem", justifyContent: "center" }}>
-          <Link className="btn btn-primary" href="/signup">
+          <Link className="btn btn-cancel" href="/signup" style={{ flex: 1, padding: "0.55rem", textAlign: "center" }}>
             Create your address
           </Link>
-          <Link className="btn" href="/login">
+          <Link className="btn btn-cancel" href="/login" style={{ flex: 1, padding: "0.55rem", textAlign: "center" }}>
             Sign in
           </Link>
         </div>

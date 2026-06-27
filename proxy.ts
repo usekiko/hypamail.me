@@ -1,20 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 
-// Strict security headers for the whole site. The CSP uses a per-request nonce
-// (Next applies it to its own scripts automatically when it sees the CSP on the
-// request) so we never need 'unsafe-inline' for scripts.
+// Strict security headers for the whole site (Next 16 proxy). The CSP uses a
+// per-request nonce (Next applies it to its own scripts automatically when it
+// sees the CSP on the request) so we never need 'unsafe-inline' for scripts.
 //
-// img-src 'none' is deliberate: combined with the email sanitizer stripping
-// <img>, it guarantees no image — including remote tracking pixels — can ever
-// load, anywhere in the app.
-export function middleware(request: NextRequest) {
+// img-src allows only our own origin + the hypastack R2 CDN (landing logo).
+// Email images can never load regardless: the email sanitizer strips every
+// <img> before render, so tracking pixels are blocked even though the app
+// itself may show a logo.
+export default function proxy(request: NextRequest) {
   const nonce = btoa(crypto.randomUUID());
 
   const csp = [
     `default-src 'self'`,
     `script-src 'self' 'nonce-${nonce}' https://challenges.cloudflare.com`,
     `style-src 'self' 'unsafe-inline'`,
-    `img-src 'none'`,
+    `img-src 'self' https://r2.hypastack.com`,
     `font-src 'self'`,
     `connect-src 'self' https://challenges.cloudflare.com`,
     `frame-src https://challenges.cloudflare.com`,
