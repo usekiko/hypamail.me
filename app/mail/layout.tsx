@@ -15,7 +15,7 @@ export default async function MailLayout({ children }: { children: React.ReactNo
           justifyContent: "space-between",
           padding: "10px 16px",
           borderBottom: "1px solid #1f1f1f",
-          background: "#080808",
+          background: "#000000",
           position: "sticky",
           top: 0,
           zIndex: 10,

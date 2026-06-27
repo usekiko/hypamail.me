@@ -36,7 +36,7 @@ export default async function Inbox() {
 
       {error && <div style={{ color: "#e06a6a" }}>{error}</div>}
       {!error && mail.length === 0 && (
-        <div className="panel" style={{ color: "#878787", padding: "2.5rem", textAlign: "center" }}>
+        <div style={{ color: "#878787", padding: "2.5rem", textAlign: "center" }}>
           No messages yet.
         </div>
       )}
