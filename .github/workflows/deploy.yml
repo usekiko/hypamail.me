@@ -1,9 +1,10 @@
 name: Deploy Hypamail Web
-# deploy trigger
 
 # Rebuilds the rootless podman image and restarts the quadlet service on push.
-# NOTE: the VPS sets `PerSourcePenalties noauth:0` in sshd; without it, OpenSSH
-# penalises GitHub's shared runner IPs and this deploy fails with i/o timeout.
+# Uses a native SSH deploy with dial retries: the VPS occasionally drops a single
+# inbound SYN from GitHub's shared runner IPs (transient OVH/edge), which made the
+# no-retry appleboy/ssh-action fail with "dial tcp i/o timeout". Retrying the dial
+# a few times makes the deploy resilient to that.
 on:
   workflow_dispatch:
   push:
@@ -18,14 +19,18 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy to VPS
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.SERVER_IP }}
-          port: ${{ secrets.SSH_PORT }}
-          username: ubuntu
-          key: ${{ secrets.SSH_KEY }}
-          script: |
+      - name: Deploy to VPS (retrying dial)
+        env:
+          SSH_KEY: ${{ secrets.SSH_KEY }}
+          SERVER_IP: ${{ secrets.SERVER_IP }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+          remote_script='
             export XDG_RUNTIME_DIR=/run/user/$(id -u)
             cd ~/hypamail-web
             git fetch origin
@@ -33,3 +38,21 @@ jobs:
             podman build --network=host -t localhost/hypamail-web:latest .
             systemctl --user restart hypamail-web.service
             podman image prune -f
+          '
+
+          for attempt in 1 2 3 4 5; do
+            echo "::group::Deploy attempt $attempt"
+            if ssh -i ~/.ssh/deploy_key -p "$SSH_PORT" \
+                 -o StrictHostKeyChecking=accept-new \
+                 -o ConnectTimeout=20 -o ServerAliveInterval=10 \
+                 "ubuntu@$SERVER_IP" "$remote_script"; then
+              echo "::endgroup::"
+              echo "Deploy succeeded on attempt $attempt"
+              exit 0
+            fi
+            echo "::endgroup::"
+            echo "Attempt $attempt failed; retrying in 15s..."
+            sleep 15
+          done
+          echo "All deploy attempts failed" >&2
+          exit 1
