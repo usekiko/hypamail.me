@@ -1,6 +1,8 @@
 name: Deploy Hypamail Web
 
 # Rebuilds the rootless podman image and restarts the quadlet service on push.
+# NOTE: the VPS sets `PerSourcePenalties noauth:0` in sshd; without it, OpenSSH
+# penalises GitHub's shared runner IPs and this deploy fails with i/o timeout.
 on:
   workflow_dispatch:
   push:
