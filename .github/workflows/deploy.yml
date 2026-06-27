@@ -2,6 +2,7 @@ name: Deploy Hypamail Web
 
 # Rebuilds the rootless podman image and restarts the quadlet service on push.
 on:
+  workflow_dispatch:
   push:
     branches: [ main ]
     paths-ignore:
