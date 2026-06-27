@@ -9,7 +9,7 @@ export const metadata: Metadata = {
   description: "Private email on hypamail.me",
 };
 
-// Render every route per-request so the CSP nonce (set in proxy.ts) is injected
+// Render every route per-request so the CSP nonce (set in middleware.ts) is injected
 // into the page's inline scripts. Static prerendering would bake the HTML at
 // build time with no nonce, and the strict CSP would then block hydration.
 export const dynamic = "force-dynamic";

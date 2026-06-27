@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
-// Strict security headers for the whole site (Next 16 proxy). The CSP uses a
+// Strict security headers for the whole site (Next 16 middleware — renamed from
+// proxy.ts due to Turbopack detection bug in Next 16.2). The CSP uses a
 // per-request nonce (Next applies it to its own scripts automatically when it
 // sees the CSP on the request) so we never need 'unsafe-inline' for scripts.
 //
@@ -8,7 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 // Email images can never load regardless: the email sanitizer strips every
 // <img> before render, so tracking pixels are blocked even though the app
 // itself may show a logo.
-export default function proxy(request: NextRequest) {
+export default function middleware(request: NextRequest) {
   const nonce = btoa(crypto.randomUUID());
 
   const csp = [
