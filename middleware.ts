@@ -15,9 +15,9 @@ export default function middleware(request: NextRequest) {
   const csp = [
     `default-src 'self'`,
     `script-src 'self' 'nonce-${nonce}' https://challenges.cloudflare.com${process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : ""}`,
-    `style-src 'self' 'unsafe-inline'`,
+    `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com`,
     `img-src 'self' https://r2.hypastack.com`,
-    `font-src 'self'`,
+    `font-src 'self' https://fonts.gstatic.com`,
     `connect-src 'self' https://challenges.cloudflare.com`,
     `frame-src https://challenges.cloudflare.com`,
     `media-src 'none'`,

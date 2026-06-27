@@ -50,7 +50,7 @@ export default async function ReadPage({ params }: { params: Promise<{ id: strin
   return (
     <article>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-        <Link href="/mail" className="btn">← inbox</Link>
+        <Link href="/mail" className="btn" style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}><span className="icon">arrow_back</span> inbox</Link>
         <form action={deleteEmailAction}>
           <input type="hidden" name="id" value={mail.id} />
           <button className="btn btn-cancel" type="submit">delete</button>
@@ -77,10 +77,11 @@ export default async function ReadPage({ params }: { params: Promise<{ id: strin
           </pre>
         )}
       </div>
-      <p style={{ color: "#878787", fontSize: "12px", marginTop: "8px" }}>
-        🔒 Images, scripts, and all remote content are stripped from every email —
+      <p style={{ color: "#878787", fontSize: "12px", marginTop: "8px", display: "flex", alignItems: "flex-start", gap: "6px" }}>
+        <span className="icon" style={{ fontSize: "16px", marginTop: "2px" }}>lock</span>
+        <span>Images, scripts, and all remote content are stripped from every email —
         this blocks tracking pixels and malicious code. It&apos;s a security feature,
-        so messages may look plainer than in other mail apps.
+        so messages may look plainer than in other mail apps.</span>
       </p>
     </article>
   );

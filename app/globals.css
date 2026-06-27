@@ -82,7 +82,7 @@ select {
 .tbl table {
   width: 100%;
   border-collapse: collapse;
-  background: transparent;
+  background: #282828;
   font-size: clamp(10px, 1.8vw, 14px);
   color: #fff;
   table-layout: fixed;
@@ -116,6 +116,24 @@ select {
   text-decoration: underline;
 }
 
+/* ---------- icons ---------- */
+.icon {
+  font-family: 'Material Symbols Sharp';
+  font-weight: normal;
+  font-style: normal;
+  font-size: 20px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+  vertical-align: middle;
+}
+
 /* ---------- inputs ---------- */
 .inpt {
   background: #282828;
@@ -141,6 +159,6 @@ select {
 }
 
 .panel {
-  background: transparent;
+  background: #282828;
   border: none;
 }

@@ -61,7 +61,7 @@ export default async function Inbox() {
                 <tr key={m.id}>
                   <td style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: m.unread ? 700 : 400 }}>
                     <Link href={`/mail/${m.id}`}>
-                      {m.unread && <span style={{ color: "#2e6f40", marginRight: 6 }}>●</span>}
+                      {m.unread && <span className="icon" style={{ color: "#2e6f40", marginRight: 6, fontSize: "14px" }}>circle</span>}
                       {sender(m)}
                     </Link>
                   </td>
