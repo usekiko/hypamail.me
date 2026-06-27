@@ -1,4 +1,5 @@
 name: Deploy Hypamail Web
+# deploy trigger
 
 # Rebuilds the rootless podman image and restarts the quadlet service on push.
 # NOTE: the VPS sets `PerSourcePenalties noauth:0` in sshd; without it, OpenSSH
