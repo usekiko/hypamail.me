@@ -1,14 +1,16 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #08080a;
-  --panel: #121216;
-  --panel-2: #1a1a20;
-  --border: #26262e;
-  --text: #e8e8ec;
-  --muted: #9a9aa6;
-  --accent: #6d5dfc;
-  --accent-2: #8b7bff;
+  --bg: #000000;
+  --panel: #161616;      /* cards: gray */
+  --panel-2: #1f1f1f;    /* inputs */
+  --btn: #242424;        /* buttons: slightly grayer than cards */
+  --btn-hover: #2f2f2f;
+  --border: #2a2a2a;     /* input borders / dividers only — cards have none */
+  --text: #ededed;
+  --muted: #8a8a8a;
+  --accent: #555555;     /* focus ring */
+  --accent-2: #cfcfcf;   /* links, unread dot */
 }
 
 * {
@@ -36,7 +38,7 @@ a {
   justify-content: center;
   gap: 0.5rem;
   padding: 0.6rem 1.1rem;
-  border-radius: 0.6rem;
+  border-radius: 0.4rem;
   font-weight: 600;
   font-size: 0.92rem;
   cursor: pointer;
@@ -44,11 +46,11 @@ a {
   transition: background 0.15s, border-color 0.15s, opacity 0.15s;
 }
 .btn-primary {
-  background: var(--accent);
-  color: white;
+  background: var(--btn);
+  color: var(--text);
 }
 .btn-primary:hover {
-  background: var(--accent-2);
+  background: var(--btn-hover);
 }
 .btn-ghost {
   background: transparent;
@@ -62,8 +64,8 @@ a {
 .input {
   width: 100%;
   padding: 0.65rem 0.85rem;
-  border-radius: 0.6rem;
-  background: var(--panel);
+  border-radius: 0.4rem;
+  background: var(--panel-2);
   border: 1px solid var(--border);
   color: var(--text);
   font-size: 0.95rem;
@@ -73,8 +75,9 @@ a {
   border-color: var(--accent);
 }
 
+/* Cards: gray, no border, no radius */
 .card {
   background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 1rem;
+  border: none;
+  border-radius: 0;
 }

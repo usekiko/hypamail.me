@@ -1,8 +1,19 @@
 // Server-side admin operations: provision new mailbox accounts (with a disk
 // quota) via Stalwart's management JMAP, and verify Cloudflare Turnstile tokens.
 import { jmap, basicAuth } from "./jmap";
+import { randomBytes } from "crypto";
 
 const JMAP_URL = process.env.JMAP_URL || "http://127.0.0.1:8088";
+
+// Strong, readable password (ambiguous chars removed). ~16 chars easily clears
+// Stalwart's minimum strength requirement.
+export function generatePassword(len = 16): string {
+  const chars = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const bytes = randomBytes(len);
+  let out = "";
+  for (let i = 0; i < len; i++) out += chars[bytes[i] % chars.length];
+  return out;
+}
 const USING_ADMIN = ["urn:ietf:params:jmap:core", "urn:stalwart:jmap"];
 const QUOTA_KEY = "maxDiskQuota";
 
