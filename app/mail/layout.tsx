@@ -7,33 +7,16 @@ export default async function MailLayout({ children }: { children: React.ReactNo
   const session = await getSession();
   if (!session) redirect("/login");
   return (
-    <div style={{ minHeight: "100dvh", display: "flex", flexDirection: "column" }}>
-      <header
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "10px 16px",
-          borderBottom: "1px solid #1f1f1f",
-          background: "#000000",
-          position: "sticky",
-          top: 0,
-          zIndex: 10,
-        }}
-      >
-        <Link href="/mail" style={{ fontWeight: 700 }}>
-          hypamail
-        </Link>
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <span style={{ color: "#878787", fontSize: "13px" }}>{session.email}</span>
+    <main style={{ minHeight: "100dvh", display: "grid", placeItems: "center", padding: "1.5rem" }}>
+      <div style={{ width: "100%", maxWidth: 900 }}>
+        {children}
+        <div style={{ marginTop: "2rem", textAlign: "center", display: "flex", flexDirection: "column", gap: "1rem", alignItems: "center" }}>
+          <span style={{ color: "#878787", fontSize: "13px" }}>Logged in as {session.email}</span>
           <form action={logoutAction}>
-            <button className="btn btn-cancel" type="submit">sign out</button>
+            <button className="btn btn-cancel" type="submit" style={{ padding: "0.55rem 2rem" }}>sign out</button>
           </form>
         </div>
-      </header>
-      <div style={{ flex: 1, width: "100%", maxWidth: 900, margin: "0 auto", padding: "16px" }}>
-        {children}
       </div>
-    </div>
+    </main>
   );
 }

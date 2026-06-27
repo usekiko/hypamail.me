@@ -47,8 +47,8 @@ select {
   display: inline-block;
   padding: 0.375rem 0.875rem;
   font-size: 0.875rem;
-  border: 0.063rem solid #333;
-  border-radius: 0.125rem;
+  border: none;
+  border-radius: 0;
   background: #111;
   color: #fff;
   cursor: pointer;
@@ -74,8 +74,7 @@ select {
 .tbl {
   width: 100%;
   overflow-x: hidden;
-  border: 1px solid #1f1f1f;
-  border-bottom: none;
+  border: none;
 }
 .tbl.no-border {
   border: none;
@@ -83,7 +82,7 @@ select {
 .tbl table {
   width: 100%;
   border-collapse: collapse;
-  background: #080808;
+  background: transparent;
   font-size: clamp(10px, 1.8vw, 14px);
   color: #fff;
   table-layout: fixed;
@@ -92,12 +91,11 @@ select {
 .tbl td {
   padding: clamp(6px, 1vw, 10px);
   border: none;
-  border-bottom: 1px solid #333;
   text-align: left;
   vertical-align: top;
 }
 .tbl th {
-  background: #181818;
+  background: transparent;
   font-weight: bold;
   white-space: nowrap;
 }
@@ -105,10 +103,10 @@ select {
   white-space: normal;
 }
 .tbl tbody tr:nth-child(odd) {
-  background: #181818;
+  background: transparent;
 }
 .tbl tbody tr:nth-child(even) {
-  background: #080808;
+  background: transparent;
 }
 .tbl a {
   color: inherit;
@@ -143,6 +141,6 @@ select {
 }
 
 .panel {
-  background: #080808;
-  border: 1px solid #1f1f1f;
+  background: transparent;
+  border: none;
 }
