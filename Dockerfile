@@ -7,9 +7,6 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
-# Git SHA for Next.js skew protection (see next.config.ts deploymentId).
-ARG DEPLOYMENT_ID
-ENV DEPLOYMENT_ID=$DEPLOYMENT_ID
 RUN npm run build
 
 FROM node:24-bookworm-slim AS run
