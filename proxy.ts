@@ -37,7 +37,13 @@ export default function proxy(request: NextRequest) {
   h.set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
   h.set("X-Content-Type-Options", "nosniff");
   h.set("X-Frame-Options", "DENY");
-  h.set("Referrer-Policy", "no-referrer");
+  // NOT "no-referrer": per the Fetch spec a non-GET request under a no-referrer
+  // policy is sent with `Origin: null`, which trips Next.js's Server Action
+  // same-origin (CSRF) check ("x-forwarded-host does not match origin") and
+  // aborts every form action. "same-origin" still sends zero referrer to any
+  // external site (email links also carry rel="noreferrer") but keeps a valid
+  // Origin on our own POSTs so server actions work.
+  h.set("Referrer-Policy", "same-origin");
   h.set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), browsing-topics=()");
   h.set("Cross-Origin-Opener-Policy", "same-origin");
   h.set("Cross-Origin-Resource-Policy", "same-origin");

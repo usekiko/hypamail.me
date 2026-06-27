@@ -35,7 +35,7 @@ jobs:
             cd ~/hypamail-web
             git fetch origin
             git reset --hard origin/main
-            podman build --network=host -t localhost/hypamail-web:latest .
+            podman build --network=host --build-arg DEPLOYMENT_ID=$(git rev-parse --short HEAD) -t localhost/hypamail-web:latest .
             systemctl --user restart hypamail-web.service
             podman image prune -f
           '
