@@ -13,27 +13,25 @@ export default async function MailLayout({ children }: { children: React.ReactNo
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          padding: "0.9rem 1.25rem",
-          borderBottom: "1px solid var(--border)",
+          padding: "10px 16px",
+          borderBottom: "1px solid #1f1f1f",
+          background: "#080808",
           position: "sticky",
           top: 0,
-          background: "var(--bg)",
           zIndex: 10,
         }}
       >
-        <Link href="/mail" style={{ fontWeight: 700, letterSpacing: "-0.01em" }}>
+        <Link href="/mail" style={{ fontWeight: 700 }}>
           hypamail
         </Link>
-        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-          <span style={{ color: "var(--muted)", fontSize: "0.85rem" }}>{session.email}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <span style={{ color: "#878787", fontSize: "13px" }}>{session.email}</span>
           <form action={logoutAction}>
-            <button className="btn btn-ghost" style={{ padding: "0.4rem 0.8rem", fontSize: "0.85rem" }}>
-              Sign out
-            </button>
+            <button className="btn btn-cancel" type="submit">sign out</button>
           </form>
         </div>
       </header>
-      <div style={{ flex: 1, width: "100%", maxWidth: 820, margin: "0 auto", padding: "1.25rem" }}>
+      <div style={{ flex: 1, width: "100%", maxWidth: 900, margin: "0 auto", padding: "16px" }}>
         {children}
       </div>
     </div>

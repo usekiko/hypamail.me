@@ -7,10 +7,9 @@ export const dynamic = "force-dynamic";
 function when(iso: string): string {
   const d = new Date(iso);
   const now = new Date();
-  const sameDay = d.toDateString() === now.toDateString();
-  return sameDay
+  return d.toDateString() === now.toDateString()
     ? d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-    : d.toLocaleDateString([], { month: "short", day: "numeric" });
+    : d.toLocaleDateString([], { year: "numeric", month: "short", day: "numeric" });
 }
 
 function sender(m: MailSummary): string {
@@ -30,56 +29,55 @@ export default async function Inbox() {
 
   return (
     <div>
-      <h1 style={{ fontSize: "1.4rem", margin: "0 0 1rem" }}>Inbox</h1>
-      {error && <div style={{ color: "#ff7a7a" }}>{error}</div>}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "12px" }}>
+        <h1 style={{ fontSize: "1.1rem", margin: 0, fontWeight: 700 }}>inbox</h1>
+        <span style={{ color: "#878787", fontSize: "12px" }}>{mail.length} messages</span>
+      </div>
+
+      {error && <div style={{ color: "#e06a6a" }}>{error}</div>}
       {!error && mail.length === 0 && (
-        <div style={{ color: "var(--muted)", padding: "3rem 0", textAlign: "center" }}>
+        <div className="panel" style={{ color: "#878787", padding: "2.5rem", textAlign: "center" }}>
           No messages yet.
         </div>
       )}
-      <ul style={{ listStyle: "none", margin: 0, padding: 0 }} className="card">
-        {mail.map((m, i) => (
-          <li key={m.id} style={{ borderTop: i ? "1px solid var(--border)" : "none" }}>
-            <Link
-              href={`/mail/${m.id}`}
-              style={{
-                display: "grid",
-                gridTemplateColumns: "auto 1fr auto",
-                gap: "0.75rem",
-                alignItems: "baseline",
-                padding: "0.85rem 1rem",
-              }}
-            >
-              <span
-                aria-hidden
-                style={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: "50%",
-                  background: m.unread ? "var(--accent-2)" : "transparent",
-                  alignSelf: "center",
-                }}
-              />
-              <span style={{ minWidth: 0 }}>
-                <span style={{ display: "flex", gap: "0.5rem", alignItems: "baseline" }}>
-                  <strong style={{ fontWeight: m.unread ? 700 : 500, whiteSpace: "nowrap" }}>
-                    {sender(m)}
-                  </strong>
-                  <span style={{ color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {m.subject || "(no subject)"}
-                  </span>
-                </span>
-                <span style={{ color: "var(--muted)", fontSize: "0.85rem", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {m.preview}
-                </span>
-              </span>
-              <span style={{ color: "var(--muted)", fontSize: "0.8rem", whiteSpace: "nowrap" }}>
-                {when(m.receivedAt)}
-              </span>
-            </Link>
-          </li>
-        ))}
-      </ul>
+
+      {mail.length > 0 && (
+        <div className="tbl">
+          <table>
+            <colgroup>
+              <col style={{ width: "26%" }} />
+              <col />
+              <col style={{ width: "20%" }} />
+            </colgroup>
+            <thead>
+              <tr>
+                <th>From</th>
+                <th>Subject</th>
+                <th style={{ textAlign: "right" }}>Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {mail.map((m) => (
+                <tr key={m.id}>
+                  <td style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: m.unread ? 700 : 400 }}>
+                    <Link href={`/mail/${m.id}`}>
+                      {m.unread && <span style={{ color: "#2e6f40", marginRight: 6 }}>●</span>}
+                      {sender(m)}
+                    </Link>
+                  </td>
+                  <td style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <Link href={`/mail/${m.id}`}>
+                      <span style={{ fontWeight: m.unread ? 700 : 400 }}>{m.subject || "(no subject)"}</span>
+                      <span style={{ color: "#878787" }}> — {m.preview}</span>
+                    </Link>
+                  </td>
+                  <td style={{ textAlign: "right", color: "#878787", whiteSpace: "nowrap" }}>{when(m.receivedAt)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

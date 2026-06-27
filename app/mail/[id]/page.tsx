@@ -7,8 +7,8 @@ import { deleteEmailAction } from "../actions";
 
 export const dynamic = "force-dynamic";
 
-// Privacy-first: strip scripts/styles/iframes and drop <img> entirely so remote
-// tracking pixels never load. Links open in a new tab, no referrer.
+// Privacy-first: strip scripts/styles/iframes and drop <img> so remote tracking
+// pixels never load. Links open in a new tab, no referrer.
 function clean(html: string): string {
   return sanitizeHtml(html, {
     allowedTags: [
@@ -43,28 +43,26 @@ export default async function ReadPage({ params }: { params: Promise<{ id: strin
 
   return (
     <article>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-        <Link href="/mail" className="btn btn-ghost" style={{ padding: "0.4rem 0.8rem", fontSize: "0.85rem" }}>
-          ← Inbox
-        </Link>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+        <Link href="/mail" className="btn">← inbox</Link>
         <form action={deleteEmailAction}>
           <input type="hidden" name="id" value={mail.id} />
-          <button className="btn btn-ghost" style={{ padding: "0.4rem 0.8rem", fontSize: "0.85rem", color: "#ff9a9a" }}>
-            Delete
-          </button>
+          <button className="btn btn-cancel" type="submit">delete</button>
         </form>
       </div>
 
-      <h1 style={{ fontSize: "1.5rem", margin: "0 0 0.75rem" }}>{mail.subject || "(no subject)"}</h1>
-      <div style={{ display: "flex", justifyContent: "space-between", color: "var(--muted)", fontSize: "0.9rem", marginBottom: "1.25rem", flexWrap: "wrap", gap: "0.5rem" }}>
-        <span>
-          <strong style={{ color: "var(--text)" }}>{from ? from.name || from.email : "(unknown)"}</strong>
-          {from?.name && <span> &lt;{from.email}&gt;</span>}
-        </span>
-        <span>{new Date(mail.receivedAt).toLocaleString()}</span>
+      <div className="panel" style={{ padding: "16px", marginBottom: "10px" }}>
+        <h1 style={{ fontSize: "1.15rem", margin: "0 0 0.6rem", fontWeight: 700 }}>{mail.subject || "(no subject)"}</h1>
+        <div style={{ display: "flex", justifyContent: "space-between", color: "#878787", fontSize: "13px", flexWrap: "wrap", gap: "0.5rem" }}>
+          <span>
+            <span style={{ color: "#fff" }}>{from ? from.name || from.email : "(unknown)"}</span>
+            {from?.name && <span> &lt;{from.email}&gt;</span>}
+          </span>
+          <span>{new Date(mail.receivedAt).toLocaleString()}</span>
+        </div>
       </div>
 
-      <div className="card" style={{ padding: "1.25rem", lineHeight: 1.6, overflowWrap: "anywhere" }}>
+      <div className="panel" style={{ padding: "16px", lineHeight: 1.6, overflowWrap: "anywhere" }}>
         {cleanHtml ? (
           <div dangerouslySetInnerHTML={{ __html: cleanHtml }} />
         ) : (
@@ -73,7 +71,7 @@ export default async function ReadPage({ params }: { params: Promise<{ id: strin
           </pre>
         )}
       </div>
-      <p style={{ color: "var(--muted)", fontSize: "0.75rem", marginTop: "0.75rem" }}>
+      <p style={{ color: "#878787", fontSize: "12px", marginTop: "8px" }}>
         Remote images are blocked for your privacy.
       </p>
     </article>

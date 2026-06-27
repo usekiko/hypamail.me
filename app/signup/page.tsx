@@ -14,23 +14,20 @@ export default function SignupPage() {
   if (state?.ok) {
     return (
       <main style={{ minHeight: "100dvh", display: "grid", placeItems: "center", padding: "1.5rem" }}>
-        <div className="card" style={{ width: "100%", maxWidth: 480, padding: "2.75rem" }}>
-          <h1 style={{ margin: "0 0 0.25rem", fontSize: "1.5rem" }}>You&apos;re in</h1>
-          <p style={{ color: "var(--muted)", margin: "0 0 1.5rem", fontSize: "0.9rem" }}>
+        <div style={{ width: "100%", maxWidth: 500 }}>
+          <h1 style={{ textAlign: "center", fontSize: "1.75rem", fontWeight: 600, margin: "0 0 0.5rem" }}>You&apos;re in</h1>
+          <p style={{ textAlign: "center", color: "#878787", fontSize: "13px", margin: "0 0 1.75rem" }}>
             Save your password — it won&apos;t be shown again.
           </p>
-          <label style={{ color: "var(--muted)", fontSize: "0.75rem" }}>Address</label>
-          <div className="input" style={{ marginTop: "0.25rem", marginBottom: "0.9rem", userSelect: "all" }}>
+          <label className="field-label">Address</label>
+          <div className="inpt" style={{ height: "auto", padding: "9px 10px", marginBottom: "1rem", userSelect: "all" }}>
             {state.email}
           </div>
-          <label style={{ color: "var(--muted)", fontSize: "0.75rem" }}>Password</label>
-          <div
-            className="input"
-            style={{ marginTop: "0.25rem", marginBottom: "1.25rem", fontFamily: "ui-monospace, monospace", letterSpacing: "0.04em", userSelect: "all" }}
-          >
+          <label className="field-label">Password</label>
+          <div className="inpt" style={{ height: "auto", padding: "9px 10px", marginBottom: "1.5rem", fontFamily: "ui-monospace, monospace", userSelect: "all" }}>
             {state.password}
           </div>
-          <Link className="btn btn-primary" href="/mail" style={{ width: "100%" }}>
+          <Link className="btn btn-primary" href="/mail" style={{ display: "block", width: "100%", textAlign: "center", padding: "0.55rem" }}>
             Go to inbox
           </Link>
         </div>
@@ -41,50 +38,37 @@ export default function SignupPage() {
   return (
     <main style={{ minHeight: "100dvh", display: "grid", placeItems: "center", padding: "1.5rem" }}>
       <Script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer />
-      <div className="card" style={{ width: "100%", maxWidth: 480, padding: "2.75rem" }}>
-        <h1 style={{ margin: "0 0 0.25rem", fontSize: "1.5rem" }}>Create your address</h1>
-        <p style={{ color: "var(--muted)", margin: "0 0 1.5rem", fontSize: "0.9rem" }}>
-          on hypamail.me — invite-only. A password is generated for you.
+      <div style={{ width: "100%", maxWidth: 500 }}>
+        <h1 style={{ textAlign: "center", fontSize: "1.75rem", fontWeight: 600, margin: "0 0 0.5rem" }}>Register</h1>
+        <p style={{ textAlign: "center", color: "#878787", fontSize: "13px", margin: "0 0 1.75rem" }}>
+          invite-only — a password is generated for you
         </p>
-        <form action={action} style={{ display: "flex", flexDirection: "column", gap: "0.8rem" }}>
-          <div style={{ display: "flex", alignItems: "stretch" }}>
-            <input
-              className="input"
-              name="username"
-              placeholder="username"
-              autoComplete="off"
-              autoCapitalize="none"
-              required
-            />
-            <span
-              style={{
-                display: "flex",
-                alignItems: "center",
-                padding: "0 0.9rem",
-                background: "var(--field)",
-                color: "var(--muted)",
-                fontSize: "0.9rem",
-                whiteSpace: "nowrap",
-              }}
-            >
-              @{DOMAIN}
-            </span>
+        <form action={action} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+          <div>
+            <label className="field-label">Username</label>
+            <div style={{ display: "flex" }}>
+              <input className="inpt" name="username" placeholder="Username" autoComplete="off" autoCapitalize="none" required style={{ flex: 1 }} />
+              <span style={{ display: "flex", alignItems: "center", padding: "0 12px", background: "#1f1f1f", color: "#878787", fontSize: "14px", whiteSpace: "nowrap" }}>
+                @{DOMAIN}
+              </span>
+            </div>
           </div>
-          <input className="input" name="invite" placeholder="invite code" autoComplete="off" required />
+          <div>
+            <label className="field-label">Invite code</label>
+            <input className="inpt" name="invite" placeholder="Invite code" autoComplete="off" required />
+          </div>
           {SITE_KEY ? (
             <div className="cf-turnstile" data-sitekey={SITE_KEY} data-theme="dark" />
           ) : (
-            <div style={{ color: "var(--muted)", fontSize: "0.8rem" }}>
-              (Turnstile not configured)
-            </div>
+            <div style={{ color: "#878787", fontSize: "12px" }}>(Turnstile not configured)</div>
           )}
-          {state?.error && <div style={{ color: "#ff7a7a", fontSize: "0.85rem" }}>{state.error}</div>}
-          <button className="btn btn-primary" type="submit" disabled={pending} style={{ marginTop: "0.25rem" }}>
-            {pending ? "Creating…" : "Create address"}
+          {state?.error && <div style={{ color: "#e06a6a", fontSize: "13px" }}>{state.error}</div>}
+          <button className="btn btn-cancel" type="submit" disabled={pending} style={{ width: "100%", padding: "0.55rem" }}>
+            {pending ? "Creating…" : "Register"}
           </button>
         </form>
-        <p style={{ color: "var(--muted)", fontSize: "0.85rem", marginTop: "1.25rem", textAlign: "center" }}>
-          Already have one? <Link href="/login" style={{ color: "var(--accent-2)" }}>Sign in</Link>
+        <p style={{ textAlign: "center", fontSize: "13px", marginTop: "1.25rem" }}>
+          <Link href="/login" style={{ fontWeight: 600 }}>Already have an account?</Link>
         </p>
       </div>
     </main>

@@ -8,23 +8,24 @@ export default function LoginPage() {
   const [state, action, pending] = useActionState<FormState, FormData>(loginAction, null);
   return (
     <main style={{ minHeight: "100dvh", display: "grid", placeItems: "center", padding: "1.5rem" }}>
-      <div className="card" style={{ width: "100%", maxWidth: 480, padding: "2.75rem" }}>
-        <h1 style={{ margin: "0 0 0.25rem", fontSize: "1.5rem" }}>Sign in</h1>
-        <p style={{ color: "var(--muted)", margin: "0 0 1.5rem", fontSize: "0.9rem" }}>
-          to your hypamail.me inbox
-        </p>
-        <form action={action} style={{ display: "flex", flexDirection: "column", gap: "0.8rem" }}>
-          <input className="input" name="username" placeholder="username" autoComplete="username" autoCapitalize="none" required />
-          <input className="input" name="password" type="password" placeholder="password" autoComplete="current-password" required />
-          {state?.error && (
-            <div style={{ color: "#ff7a7a", fontSize: "0.85rem" }}>{state.error}</div>
-          )}
-          <button className="btn btn-primary" type="submit" disabled={pending} style={{ marginTop: "0.25rem" }}>
-            {pending ? "Signing in…" : "Sign in"}
+      <div style={{ width: "100%", maxWidth: 500 }}>
+        <h1 style={{ textAlign: "center", fontSize: "1.75rem", fontWeight: 600, margin: "0 0 1.75rem" }}>Login</h1>
+        <form action={action} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+          <div>
+            <label className="field-label">Username</label>
+            <input className="inpt" name="username" placeholder="Username" autoComplete="username" autoCapitalize="none" required />
+          </div>
+          <div>
+            <label className="field-label">Password</label>
+            <input className="inpt" name="password" type="password" placeholder="Password" autoComplete="current-password" required />
+          </div>
+          {state?.error && <div style={{ color: "#e06a6a", fontSize: "13px" }}>{state.error}</div>}
+          <button className="btn btn-cancel" type="submit" disabled={pending} style={{ width: "100%", padding: "0.55rem" }}>
+            {pending ? "Logging in…" : "Login"}
           </button>
         </form>
-        <p style={{ color: "var(--muted)", fontSize: "0.85rem", marginTop: "1.25rem", textAlign: "center" }}>
-          No account? <Link href="/signup" style={{ color: "var(--accent-2)" }}>Create one</Link>
+        <p style={{ textAlign: "center", fontSize: "13px", marginTop: "1.25rem" }}>
+          <Link href="/signup" style={{ fontWeight: 600 }}>Create an account</Link>
         </p>
       </div>
     </main>
