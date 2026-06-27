@@ -9,9 +9,17 @@ const JMAP_URL = process.env.JMAP_URL || "http://127.0.0.1:8088";
 // Stalwart's minimum strength requirement.
 export function generatePassword(len = 16): string {
   const chars = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  const bytes = randomBytes(len);
+  // Rejection sampling: discard bytes in the biased tail so every char is equally
+  // likely (no modulo bias).
+  const limit = 256 - (256 % chars.length);
   let out = "";
-  for (let i = 0; i < len; i++) out += chars[bytes[i] % chars.length];
+  while (out.length < len) {
+    for (const b of randomBytes(len)) {
+      if (b >= limit) continue;
+      out += chars[b % chars.length];
+      if (out.length === len) break;
+    }
+  }
   return out;
 }
 const USING_ADMIN = ["urn:ietf:params:jmap:core", "urn:stalwart:jmap"];

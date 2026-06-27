@@ -7,8 +7,12 @@ import { deleteEmailAction } from "../actions";
 
 export const dynamic = "force-dynamic";
 
-// Privacy-first: strip scripts/styles/iframes and drop <img> so remote tracking
-// pixels never load. Links open in a new tab, no referrer.
+// Security-first email rendering. We use a strict *allowlist* of text-formatting
+// tags only — so <img>, <script>, <style>, <iframe>, <object>, <svg>, <form>,
+// event handlers, inline styles, and data:/javascript: URLs are all discarded.
+// That means no remote tracking pixels, no JavaScript, no embedded/remote
+// content of any kind can ride in on an email. Links open in a new tab with no
+// referrer. The page CSP (img-src 'none', script-src nonce-only) backs this up.
 function clean(html: string): string {
   return sanitizeHtml(html, {
     allowedTags: [
@@ -18,6 +22,8 @@ function clean(html: string): string {
     ],
     allowedAttributes: { a: ["href"] },
     allowedSchemes: ["http", "https", "mailto"],
+    allowProtocolRelative: false,
+    disallowedTagsMode: "discard",
     transformTags: {
       a: (tagName, attribs) => ({
         tagName,
@@ -72,7 +78,9 @@ export default async function ReadPage({ params }: { params: Promise<{ id: strin
         )}
       </div>
       <p style={{ color: "#878787", fontSize: "12px", marginTop: "8px" }}>
-        Remote images are blocked for your privacy.
+        🔒 Images, scripts, and all remote content are stripped from every email —
+        this blocks tracking pixels and malicious code. It&apos;s a security feature,
+        so messages may look plainer than in other mail apps.
       </p>
     </article>
   );
