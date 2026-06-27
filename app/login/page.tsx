@@ -8,7 +8,7 @@ export default function LoginPage() {
   const [state, action, pending] = useActionState<FormState, FormData>(loginAction, null);
   return (
     <main style={{ minHeight: "100dvh", display: "grid", placeItems: "center", padding: "1.5rem" }}>
-      <div className="card" style={{ width: "100%", maxWidth: 380, padding: "2rem" }}>
+      <div className="card" style={{ width: "100%", maxWidth: 480, padding: "2.75rem" }}>
         <h1 style={{ margin: "0 0 0.25rem", fontSize: "1.5rem" }}>Sign in</h1>
         <p style={{ color: "var(--muted)", margin: "0 0 1.5rem", fontSize: "0.9rem" }}>
           to your hypamail.me inbox

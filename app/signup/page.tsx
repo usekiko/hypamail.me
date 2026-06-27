@@ -14,7 +14,7 @@ export default function SignupPage() {
   if (state?.ok) {
     return (
       <main style={{ minHeight: "100dvh", display: "grid", placeItems: "center", padding: "1.5rem" }}>
-        <div className="card" style={{ width: "100%", maxWidth: 420, padding: "2rem" }}>
+        <div className="card" style={{ width: "100%", maxWidth: 480, padding: "2.75rem" }}>
           <h1 style={{ margin: "0 0 0.25rem", fontSize: "1.5rem" }}>You&apos;re in</h1>
           <p style={{ color: "var(--muted)", margin: "0 0 1.5rem", fontSize: "0.9rem" }}>
             Save your password — it won&apos;t be shown again.
@@ -41,7 +41,7 @@ export default function SignupPage() {
   return (
     <main style={{ minHeight: "100dvh", display: "grid", placeItems: "center", padding: "1.5rem" }}>
       <Script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer />
-      <div className="card" style={{ width: "100%", maxWidth: 380, padding: "2rem" }}>
+      <div className="card" style={{ width: "100%", maxWidth: 480, padding: "2.75rem" }}>
         <h1 style={{ margin: "0 0 0.25rem", fontSize: "1.5rem" }}>Create your address</h1>
         <p style={{ color: "var(--muted)", margin: "0 0 1.5rem", fontSize: "0.9rem" }}>
           on hypamail.me — invite-only. A password is generated for you.
@@ -55,16 +55,13 @@ export default function SignupPage() {
               autoComplete="off"
               autoCapitalize="none"
               required
-              style={{ borderTopRightRadius: 0, borderBottomRightRadius: 0, borderRight: "none" }}
             />
             <span
               style={{
                 display: "flex",
                 alignItems: "center",
-                padding: "0 0.75rem",
-                background: "var(--panel-2)",
-                border: "1px solid var(--border)",
-                borderLeft: "none",
+                padding: "0 0.9rem",
+                background: "var(--field)",
                 color: "var(--muted)",
                 fontSize: "0.9rem",
                 whiteSpace: "nowrap",
