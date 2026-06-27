@@ -99,10 +99,14 @@ export async function verifyTurnstile(token: string, ip?: string): Promise<boole
   if (!secret) return false;
   const form = new URLSearchParams({ secret, response: token });
   if (ip) form.set("remoteip", ip);
-  const res = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
-    method: "POST",
-    body: form,
-  });
-  const data = await res.json();
-  return !!data.success;
+  try {
+    const res = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+      method: "POST",
+      body: form,
+    });
+    const data = await res.json();
+    return !!data.success;
+  } catch {
+    return false;
+  }
 }

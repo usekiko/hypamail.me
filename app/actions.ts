@@ -63,8 +63,13 @@ export async function signupAction(_prev: FormState, formData: FormData): Promis
     return { error: "Could not create the account. Please try again." };
   }
 
-  const accountId = await authenticate(email, password);
-  if (accountId) await createSession({ email, password, accountId });
+  try {
+    const accountId = await authenticate(email, password);
+    if (accountId) await createSession({ email, password, accountId });
+  } catch {
+    // Account exists; session just couldn't be established. Still show the
+    // credentials so the user can sign in manually.
+  }
   // Don't redirect — return the credentials so the user can save the generated password.
   return { ok: true, email, password };
 }
