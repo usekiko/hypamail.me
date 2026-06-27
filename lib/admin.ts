@@ -80,7 +80,6 @@ export async function provisionAccount(username: string, password: string): Prom
             "@type": "User",
             name: username,
             domainId: did,
-            description: "",
             roles: { "@type": "User" },
             quotas: { [QUOTA_KEY]: quota },
             credentials: { "0": { "@type": "Password", secret: password } },
