@@ -71,7 +71,14 @@ export default async function Inbox() {
                       <span style={{ color: "#878787" }}> — {m.preview}</span>
                     </Link>
                   </td>
-                  <td style={{ textAlign: "right", color: "#878787", whiteSpace: "nowrap" }}>{when(m.receivedAt)}</td>
+                  <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                    {m.spam && (
+                      <span style={{ display: "inline-block", marginRight: 8, padding: "1px 6px", borderRadius: 4, background: "rgba(216,166,87,0.12)", color: "#d8a657", fontSize: "11px", fontWeight: 600, verticalAlign: "middle" }}>
+                        Probable spam
+                      </span>
+                    )}
+                    <span style={{ color: "#878787" }}>{when(m.receivedAt)}</span>
+                  </td>
                 </tr>
               ))}
             </tbody>

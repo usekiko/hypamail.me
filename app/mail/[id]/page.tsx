@@ -57,6 +57,13 @@ export default async function ReadPage({ params }: { params: Promise<{ id: strin
         </form>
       </div>
 
+      {mail.spam && (
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "9px 12px", marginBottom: "10px", borderRadius: 6, background: "rgba(216,166,87,0.12)", color: "#d8a657", fontSize: "13px" }}>
+          <span className="icon" style={{ fontSize: "18px" }}>report</span>
+          <span>Flagged as probable spam — be cautious with links, attachments, and anything asking for personal info.</span>
+        </div>
+      )}
+
       <div className="panel" style={{ padding: "16px", marginBottom: "10px" }}>
         <h1 style={{ fontSize: "1.15rem", margin: "0 0 0.6rem", fontWeight: 700 }}>{mail.subject || "(no subject)"}</h1>
         <div style={{ display: "flex", justifyContent: "space-between", color: "#878787", fontSize: "13px", flexWrap: "wrap", gap: "0.5rem" }}>

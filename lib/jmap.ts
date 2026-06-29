@@ -34,14 +34,22 @@ export async function authenticate(email: string, password: string): Promise<str
   return session.primaryAccounts?.["urn:ietf:params:jmap:mail"] ?? null;
 }
 
-async function inboxId(auth: string, accountId: string): Promise<string> {
+// Returns the inbox mailbox id (required) and the junk/spam mailbox id (if the
+// account has one). Burner-mail UX: we surface Junk *in* the inbox view rather
+// than hiding it, so flagged-but-wanted mail (signup confirmations, OTPs, etc.)
+// is never lost — just labelled. See listInbox / MailSummary.spam.
+async function inboxAndJunk(
+  auth: string,
+  accountId: string
+): Promise<{ inbox: string; junk: string | null }> {
   const [getRes] = await jmap(auth, USING_MAIL, [
     ["Mailbox/get", { accountId, properties: ["role"] }, "0"],
   ]);
   const list = (getRes[1].list as Array<{ id: string; role: string }>) || [];
   const inbox = list.find((m) => m.role === "inbox");
+  const junk = list.find((m) => m.role === "junk");
   if (!inbox) throw new Error("no inbox mailbox");
-  return inbox.id;
+  return { inbox: inbox.id, junk: junk?.id ?? null };
 }
 
 export interface MailSummary {
@@ -51,6 +59,7 @@ export interface MailSummary {
   preview: string;
   receivedAt: string;
   unread: boolean;
+  spam: boolean;
 }
 
 export async function listInbox(
@@ -60,13 +69,17 @@ export async function listInbox(
   limit = 50
 ): Promise<MailSummary[]> {
   const auth = basicAuth(email, password);
-  const mbox = await inboxId(auth, accountId);
+  const { inbox, junk } = await inboxAndJunk(auth, accountId);
+  // Show Inbox + Junk together; tag Junk messages as spam instead of hiding them.
+  const filter = junk
+    ? { operator: "OR", conditions: [{ inMailbox: inbox }, { inMailbox: junk }] }
+    : { inMailbox: inbox };
   const responses = await jmap(auth, USING_MAIL, [
     [
       "Email/query",
       {
         accountId,
-        filter: { inMailbox: mbox },
+        filter,
         sort: [{ property: "receivedAt", isAscending: false }],
         limit,
       },
@@ -77,7 +90,7 @@ export async function listInbox(
       {
         accountId,
         "#ids": { resultOf: "0", name: "Email/query", path: "/ids" },
-        properties: ["from", "subject", "preview", "receivedAt", "keywords"],
+        properties: ["from", "subject", "preview", "receivedAt", "keywords", "mailboxIds"],
       },
       "1",
     ],
@@ -90,6 +103,7 @@ export async function listInbox(
     preview: (e.preview as string) || "",
     receivedAt: e.receivedAt as string,
     unread: !((e.keywords as Record<string, boolean>) || {})["$seen"],
+    spam: junk ? !!((e.mailboxIds as Record<string, boolean>) || {})[junk] : false,
   }));
 }
 
@@ -106,6 +120,7 @@ export async function getEmail(
   id: string
 ): Promise<MailDetail | null> {
   const auth = basicAuth(email, password);
+  const { junk } = await inboxAndJunk(auth, accountId);
   const responses = await jmap(auth, USING_MAIL, [
     [
       "Email/get",
@@ -113,7 +128,7 @@ export async function getEmail(
         accountId,
         ids: [id],
         properties: [
-          "from", "to", "subject", "preview", "receivedAt", "keywords",
+          "from", "to", "subject", "preview", "receivedAt", "keywords", "mailboxIds",
           "htmlBody", "textBody", "bodyValues",
         ],
         fetchHTMLBodyValues: true,
@@ -136,6 +151,7 @@ export async function getEmail(
     preview: (e.preview as string) || "",
     receivedAt: e.receivedAt as string,
     unread: !((e.keywords as Record<string, boolean>) || {})["$seen"],
+    spam: junk ? !!((e.mailboxIds as Record<string, boolean>) || {})[junk] : false,
     html: partText(e.htmlBody as Array<{ partId?: string }>) || null,
     text: partText(e.textBody as Array<{ partId?: string }>) || null,
   };
