@@ -27,6 +27,11 @@ async function init(): Promise<void> {
       created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
       expires_at  TIMESTAMPTZ NOT NULL
     );
+    -- The mail password lives here (AES-256-GCM encrypted), not in the cookie, so
+    -- a stolen cookie + SESSION_SECRET no longer reveals the user's permanent
+    -- password — only an opaque, revocable jti. Added via ALTER for existing DBs.
+    ALTER TABLE sessions ADD COLUMN IF NOT EXISTS account_id   TEXT;
+    ALTER TABLE sessions ADD COLUMN IF NOT EXISTS enc_password TEXT;
     CREATE TABLE IF NOT EXISTS auth_attempts (
       ip_hash     TEXT NOT NULL,
       kind        TEXT NOT NULL,
@@ -83,27 +88,45 @@ export async function releaseInviteCode(code: string): Promise<void> {
 
 const SESSION_DAYS = 7;
 
-// Create a server-side session row; returns the opaque session id to embed in
-// the encrypted cookie. Lets us revoke sessions (logout / compromise).
-export async function newSession(email: string): Promise<string> {
+export interface SessionRow {
+  email: string;
+  accountId: string;
+  encPassword: string;
+}
+
+// Create a server-side session row holding the (encrypted) mail credentials;
+// returns the opaque session id to embed in the cookie. Lets us revoke sessions
+// (logout / compromise) and keeps the password off the client entirely.
+export async function newSession(
+  email: string,
+  accountId: string,
+  encPassword: string
+): Promise<string> {
   await db();
   const jti = randomBytes(24).toString("hex");
   await getPool().query(
-    `INSERT INTO sessions (jti, email, expires_at)
-     VALUES ($1, $2, now() + ($3 || ' days')::interval)`,
-    [jti, email, String(SESSION_DAYS)]
+    `INSERT INTO sessions (jti, email, account_id, enc_password, expires_at)
+     VALUES ($1, $2, $3, $4, now() + ($5 || ' days')::interval)`,
+    [jti, email, accountId, encPassword, String(SESSION_DAYS)]
   );
   return jti;
 }
 
-// Returns the session's email if the id is valid and unexpired, else null.
-export async function getSessionRow(jti: string): Promise<string | null> {
+// Returns the session's stored credentials if the id is valid and unexpired,
+// else null. enc_password is still AES-256-GCM ciphertext here — the caller
+// decrypts it. Pre-migration rows (no enc_password) return null and force a
+// re-login, which is the intended graceful upgrade path.
+export async function getSessionRow(jti: string): Promise<SessionRow | null> {
   await db();
   const r = await getPool().query(
-    `SELECT email FROM sessions WHERE jti = $1 AND expires_at > now()`,
+    `SELECT email, account_id, enc_password FROM sessions
+     WHERE jti = $1 AND expires_at > now()`,
     [jti]
   );
-  return r.rowCount === 1 ? (r.rows[0].email as string) : null;
+  if (r.rowCount !== 1) return null;
+  const row = r.rows[0];
+  if (!row.enc_password || !row.account_id) return null;
+  return { email: row.email as string, accountId: row.account_id as string, encPassword: row.enc_password as string };
 }
 
 export async function revokeSession(jti: string): Promise<void> {

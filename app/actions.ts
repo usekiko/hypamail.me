@@ -30,10 +30,22 @@ const SIGNUP_WINDOW = 600;
 
 export type FormState = { error?: string; ok?: boolean; email?: string; password?: string } | null;
 
+// Real client IP. We trust ONLY Cloudflare's CF-Connecting-IP, which Cloudflare
+// sets authoritatively and a client cannot override. We deliberately do NOT fall
+// back to X-Forwarded-For: a client can pre-set that header and Cloudflare merely
+// appends to it, so `xff.split(",")[0]` is attacker-controlled — trusting it would
+// let anyone rotate the rate-limit key on every request and defeat brute-force /
+// credential-stuffing protection (even through Cloudflare). Requests arriving
+// without the CF header (i.e. not via the proxy) collapse to one "unknown" bucket,
+// which fails closed. Keep the origin firewalled to Cloudflare IP ranges so this
+// header is always present and trustworthy.
+function clientIp(h: Headers): string | null {
+  return h.get("cf-connecting-ip")?.trim() || null;
+}
+
 async function clientIpHash(): Promise<string> {
   const h = await headers();
-  const ip = h.get("cf-connecting-ip") || h.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-  return hashIp(ip);
+  return hashIp(clientIp(h) || "unknown");
 }
 
 export async function loginAction(_prev: FormState, formData: FormData): Promise<FormState> {
@@ -79,7 +91,7 @@ export async function signupAction(_prev: FormState, formData: FormData): Promis
   if (vErr) return { error: vErr };
   if (!invite) return { error: "An invite code is required." };
 
-  const ip = (await headers()).get("cf-connecting-ip") || undefined;
+  const ip = clientIp(await headers()) ?? undefined;
   if (!(await verifyTurnstile(token, ip))) {
     await recordAttempt(ipHash, "signup");
     return { error: "Bot check failed. Please retry." };

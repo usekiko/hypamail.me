@@ -1,14 +1,15 @@
-// Encrypted session cookie. Holds the user's mail credentials so the server can
-// make per-request JMAP calls on their behalf (standard webmail pattern). The
-// cookie is AES-256-GCM encrypted (JWE) with a key derived from SESSION_SECRET,
-// httpOnly + secure, so the credentials never reach the client.
-//
-// Sessions are *revocable*: the cookie carries an opaque server-side id (jti)
-// that must exist + be unexpired in the `sessions` table. Logout deletes the
-// row, so a stolen cookie stops working immediately instead of living 7 days.
+// Revocable, server-backed session. The cookie carries ONLY an opaque session id
+// (jti), JWE-encrypted (AES-256-GCM) and httpOnly+secure. The actual mail
+// credentials live server-side in the `sessions` table, with the password
+// encrypted at rest (separate key). So:
+//   - the password never reaches the client, and
+//   - a stolen cookie + leaked SESSION_SECRET still does NOT reveal the user's
+//     permanent password — only a jti, which logout/expiry revokes.
+// The server decrypts the stored password per-request to make JMAP calls on the
+// user's behalf (standard webmail pattern, minus the password-in-cookie risk).
 import { EncryptJWT, jwtDecrypt } from "jose";
 import { cookies } from "next/headers";
-import { createHash } from "crypto";
+import { createHash, randomBytes, createCipheriv, createDecipheriv } from "crypto";
 import { newSession, getSessionRow, revokeSession } from "./db";
 
 const COOKIE = "hm_session";
@@ -20,6 +21,34 @@ function key(): Uint8Array {
   return new Uint8Array(createHash("sha256").update(secret).digest());
 }
 
+// Key for encrypting the stored mail password. Derived from a dedicated
+// CREDENTIAL_SECRET when set (lets you keep it off the DB host for full
+// separation), otherwise a distinct subkey of SESSION_SECRET so it is never the
+// same bytes as the cookie key above.
+function credKey(): Buffer {
+  const secret = process.env.CREDENTIAL_SECRET || process.env.SESSION_SECRET;
+  if (!secret) throw new Error("CREDENTIAL_SECRET/SESSION_SECRET not set");
+  return createHash("sha256").update(secret + ":creds").digest();
+}
+
+// AES-256-GCM. Output is base64(iv ‖ authTag ‖ ciphertext).
+function encryptSecret(plain: string): string {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", credKey(), iv);
+  const ct = Buffer.concat([cipher.update(plain, "utf8"), cipher.final()]);
+  return Buffer.concat([iv, cipher.getAuthTag(), ct]).toString("base64");
+}
+
+function decryptSecret(blob: string): string {
+  const buf = Buffer.from(blob, "base64");
+  const iv = buf.subarray(0, 12);
+  const tag = buf.subarray(12, 28);
+  const ct = buf.subarray(28);
+  const decipher = createDecipheriv("aes-256-gcm", credKey(), iv);
+  decipher.setAuthTag(tag);
+  return Buffer.concat([decipher.update(ct), decipher.final()]).toString("utf8");
+}
+
 export interface Session {
   email: string;
   password: string;
@@ -27,8 +56,8 @@ export interface Session {
 }
 
 export async function createSession(data: Session): Promise<void> {
-  const jti = await newSession(data.email);
-  const jwt = await new EncryptJWT({ ...data, jti })
+  const jti = await newSession(data.email, data.accountId, encryptSecret(data.password));
+  const jwt = await new EncryptJWT({ jti })
     .setProtectedHeader({ alg: "dir", enc: "A256GCM" })
     .setIssuedAt()
     .setExpirationTime("7d")
@@ -48,12 +77,15 @@ export async function getSession(): Promise<Session | null> {
   try {
     const { payload } = await jwtDecrypt(c.value, key());
     const jti = payload.jti as string | undefined;
-    // Reject sessions that were revoked or expired server-side.
-    if (!jti || !(await getSessionRow(jti))) return null;
+    if (!jti) return null;
+    // Load credentials server-side; rejects sessions revoked/expired (or
+    // pre-migration cookies that predate server-stored creds → re-login).
+    const row = await getSessionRow(jti);
+    if (!row) return null;
     return {
-      email: payload.email as string,
-      password: payload.password as string,
-      accountId: payload.accountId as string,
+      email: row.email,
+      password: decryptSecret(row.encPassword),
+      accountId: row.accountId,
     };
   } catch {
     return null;
