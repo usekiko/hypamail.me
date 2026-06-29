@@ -22,7 +22,7 @@ export default function SignupPage() {
 
   if (state?.ok) {
     return (
-      <main style={{ minHeight: "100dvh", display: "flex", flexDirection: "column", justifyContent: "center", padding: "1.5rem" }}>
+      <main style={{ minHeight: "100dvh", display: "grid", placeItems: "center", padding: "1.5rem" }}>
         <div style={{ width: "100%", maxWidth: 500 }}>
           <Logo />
           <h1 style={{ fontSize: "1.75rem", fontWeight: 600, margin: "0 0 0.5rem" }}>You&apos;re in</h1>
@@ -46,7 +46,7 @@ export default function SignupPage() {
   }
 
   return (
-    <main style={{ minHeight: "100dvh", display: "flex", flexDirection: "column", justifyContent: "center", padding: "1.5rem" }}>
+    <main style={{ minHeight: "100dvh", display: "grid", placeItems: "center", padding: "1.5rem" }}>
       <Script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer />
       <div style={{ width: "100%", maxWidth: 500 }}>
         <Logo />

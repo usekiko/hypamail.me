@@ -7,7 +7,7 @@ import { loginAction, type FormState } from "../actions";
 export default function LoginPage() {
   const [state, action, pending] = useActionState<FormState, FormData>(loginAction, null);
   return (
-    <main style={{ minHeight: "100dvh", display: "flex", flexDirection: "column", justifyContent: "center", padding: "1.5rem" }}>
+    <main style={{ minHeight: "100dvh", display: "grid", placeItems: "center", padding: "1.5rem" }}>
       <div style={{ width: "100%", maxWidth: 500 }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
