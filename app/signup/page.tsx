@@ -8,15 +8,25 @@ import { signupAction, type FormState } from "../actions";
 const DOMAIN = process.env.NEXT_PUBLIC_MAIL_DOMAIN || "hypamail.me";
 const SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "";
 
+const Logo = () => (
+  // eslint-disable-next-line @next/next/no-img-element
+  <img
+    src="https://r2.hypastack.com/cdn/fepvmb5y0u31/hypamail.webp"
+    alt="hypamail"
+    style={{ height: 80, width: "auto", display: "block", marginBottom: "1.5rem" }}
+  />
+);
+
 export default function SignupPage() {
   const [state, action, pending] = useActionState<FormState, FormData>(signupAction, null);
 
   if (state?.ok) {
     return (
-      <main style={{ minHeight: "100dvh", display: "grid", placeItems: "center", padding: "1.5rem" }}>
+      <main style={{ minHeight: "100dvh", display: "flex", flexDirection: "column", justifyContent: "center", padding: "1.5rem" }}>
         <div style={{ width: "100%", maxWidth: 500 }}>
-          <h1 style={{ textAlign: "center", fontSize: "1.75rem", fontWeight: 600, margin: "0 0 0.5rem" }}>You&apos;re in</h1>
-          <p style={{ textAlign: "center", color: "#878787", fontSize: "13px", margin: "0 0 1.75rem" }}>
+          <Logo />
+          <h1 style={{ fontSize: "1.75rem", fontWeight: 600, margin: "0 0 0.5rem" }}>You&apos;re in</h1>
+          <p style={{ color: "#878787", fontSize: "13px", margin: "0 0 1.75rem" }}>
             Save your password — it won&apos;t be shown again.
           </p>
           <label className="field-label">Address</label>
@@ -36,11 +46,12 @@ export default function SignupPage() {
   }
 
   return (
-    <main style={{ minHeight: "100dvh", display: "grid", placeItems: "center", padding: "1.5rem" }}>
+    <main style={{ minHeight: "100dvh", display: "flex", flexDirection: "column", justifyContent: "center", padding: "1.5rem" }}>
       <Script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer />
       <div style={{ width: "100%", maxWidth: 500 }}>
-        <h1 style={{ textAlign: "center", fontSize: "1.75rem", fontWeight: 600, margin: "0 0 0.5rem" }}>Register</h1>
-        <p style={{ textAlign: "center", color: "#878787", fontSize: "13px", margin: "0 0 1.75rem" }}>
+        <Logo />
+        <h1 style={{ fontSize: "1.75rem", fontWeight: 600, margin: "0 0 0.5rem" }}>Register</h1>
+        <p style={{ color: "#878787", fontSize: "13px", margin: "0 0 1.75rem" }}>
           invite-only — a password is generated for you
         </p>
         <form action={action} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
@@ -67,7 +78,7 @@ export default function SignupPage() {
             {pending ? "Creating…" : "Register"}
           </button>
         </form>
-        <p style={{ textAlign: "center", fontSize: "13px", marginTop: "1.25rem" }}>
+        <p style={{ fontSize: "13px", marginTop: "1.25rem" }}>
           <Link href="/login" style={{ fontWeight: 600 }}>Already have an account?</Link>
         </p>
       </div>

@@ -7,9 +7,15 @@ import { loginAction, type FormState } from "../actions";
 export default function LoginPage() {
   const [state, action, pending] = useActionState<FormState, FormData>(loginAction, null);
   return (
-    <main style={{ minHeight: "100dvh", display: "grid", placeItems: "center", padding: "1.5rem" }}>
+    <main style={{ minHeight: "100dvh", display: "flex", flexDirection: "column", justifyContent: "center", padding: "1.5rem" }}>
       <div style={{ width: "100%", maxWidth: 500 }}>
-        <h1 style={{ textAlign: "center", fontSize: "1.75rem", fontWeight: 600, margin: "0 0 1.75rem" }}>Login</h1>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="https://r2.hypastack.com/cdn/fepvmb5y0u31/hypamail.webp"
+          alt="hypamail"
+          style={{ height: 80, width: "auto", display: "block", marginBottom: "1.5rem" }}
+        />
+        <h1 style={{ fontSize: "1.75rem", fontWeight: 600, margin: "0 0 1.75rem" }}>Login</h1>
         <form action={action} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
           <div>
             <label className="field-label">Username</label>
@@ -24,7 +30,7 @@ export default function LoginPage() {
             {pending ? "Logging in…" : "Login"}
           </button>
         </form>
-        <p style={{ textAlign: "center", fontSize: "13px", marginTop: "1.25rem" }}>
+        <p style={{ fontSize: "13px", marginTop: "1.25rem" }}>
           <Link href="/signup" style={{ fontWeight: 600 }}>Create an account</Link>
         </p>
       </div>
