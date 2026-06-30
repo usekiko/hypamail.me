@@ -49,9 +49,9 @@ export default async function ReadPage({ params }: { params: Promise<{ id: strin
 
   return (
     <article>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "stretch", marginBottom: "12px" }}>
         <Link href="/mail" className="btn btn-cancel" style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}><span className="icon">arrow_back</span> inbox</Link>
-        <form action={deleteEmailAction}>
+        <form action={deleteEmailAction} style={{ display: "flex" }}>
           <input type="hidden" name="id" value={mail.id} />
           <button className="btn btn-cancel" type="submit">delete</button>
         </form>
