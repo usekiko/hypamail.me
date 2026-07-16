@@ -29,6 +29,7 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [totpCode, setTotpCode] = useState("");
+  const [totpReason, setTotpReason] = useState<"added-passkey" | "always-on" | null>(null);
   const [words, setWords] = useState("");
   // Carried between steps within one attempt.
   const [ctx, setCtx] = useState<{
@@ -66,6 +67,7 @@ export default function LoginPage() {
       }
       setCtx({ prfOutput: got.prfOutput, credentialId: got.credentialId });
       if (res.needTotp) {
+        setTotpReason(res.totpReason ?? null);
         setPhase("totp");
         return;
       }
@@ -148,8 +150,9 @@ export default function LoginPage() {
         {phase === "totp" && (
           <form onSubmit={onTotp} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
             <p style={{ color: "#878787", fontSize: "13px", margin: 0, lineHeight: 1.6 }}>
-              This passkey was added after signup, so it also needs a code from your
-              authenticator app.
+              {totpReason === "always-on"
+                ? "You've asked for a code on every sign-in. Enter the one from your authenticator app."
+                : "This passkey was added after signup, so it also needs a code from your authenticator app."}
             </p>
             <input
               className="inpt"

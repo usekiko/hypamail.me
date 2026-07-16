@@ -12,6 +12,7 @@ import {
   addPasskeyBegin,
   addPasskeyComplete,
   removePasskey,
+  setLoginTotpRequired,
 } from "../../actions";
 import {
   deriveRecoveryAuthKey,
@@ -32,7 +33,12 @@ interface Passkey {
   lastUsedAt: string | null;
 }
 
-type Mode = { kind: "view" } | { kind: "add" } | { kind: "remove"; id: string };
+type Mode =
+  | { kind: "view" }
+  | { kind: "add" }
+  | { kind: "remove"; id: string }
+  | { kind: "totp-on" }
+  | { kind: "totp-off" };
 
 // NOTE: defined at module scope, NOT inside SettingsPage. A component declared
 // inside another component gets a new identity on every render, so React would
@@ -100,6 +106,7 @@ function GateForm({
 export default function SettingsPage() {
   const [passkeys, setPasskeys] = useState<Passkey[] | null>(null);
   const [max, setMax] = useState(3);
+  const [requireTotp, setRequireTotp] = useState(false);
   const [mode, setMode] = useState<Mode>({ kind: "view" });
   const [words, setWords] = useState("");
   const [totpCode, setTotpCode] = useState("");
@@ -112,6 +119,7 @@ export default function SettingsPage() {
     if (res.passkeys) {
       setPasskeys(res.passkeys);
       if (res.max) setMax(res.max);
+      setRequireTotp(!!res.requireTotpOnLogin);
     }
   }, []);
 
@@ -201,6 +209,43 @@ export default function SettingsPage() {
       await reload();
       resetForm({ kind: "view" });
       setNotice("Passkey removed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Turning the requirement ON only needs a live TOTP code (proves the app works
+  // so you can't lock yourself out); turning it OFF needs the full gate.
+  async function onToggleTotp(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (mode.kind !== "totp-on" && mode.kind !== "totp-off") return;
+    const enable = mode.kind === "totp-on";
+    setError(null);
+    if (!enable) {
+      const wordsErr = recoveryWordsError(words);
+      if (wordsErr) {
+        setError(wordsErr);
+        return;
+      }
+    }
+    setBusy(true);
+    try {
+      const res = await setLoginTotpRequired({
+        enable,
+        totpCode,
+        recoveryAuthKey: enable ? undefined : await deriveRecoveryAuthKey(words),
+      });
+      if (!res.ok) {
+        setError(res.error || "Could not change the setting.");
+        return;
+      }
+      await reload();
+      resetForm({ kind: "view" });
+      setNotice(
+        enable
+          ? "Every sign-in will now ask for an authenticator code."
+          : "Your original passkey signs you in with one tap again."
+      );
     } finally {
       setBusy(false);
     }
@@ -327,6 +372,90 @@ export default function SettingsPage() {
         )}
 
         <PasskeyHelp />
+      </div>
+
+      <div className="panel" style={{ padding: "16px", marginTop: "12px" }}>
+        <b style={{ fontSize: "14px" }}>Two-factor on sign-in</b>
+        <p style={{ color: "#878787", fontSize: "13px", margin: "0.5rem 0 1rem", lineHeight: 1.6 }}>
+          A passkey already counts as two factors — the device plus your fingerprint, face or PIN
+          — so by default your original passkey signs you in with one tap. Turn this on to also
+          require a code from your authenticator app every single time. Passkeys you added later
+          always ask for a code, whatever this is set to.
+        </p>
+
+        {passkeys === null ? (
+          <div style={{ color: "#878787", fontSize: "13px" }}>Loading…</div>
+        ) : (
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", borderRadius: 6, background: "#1a1a1a" }}>
+            <div>
+              <div style={{ fontSize: "13px", display: "flex", alignItems: "center", gap: "8px" }}>
+                Ask for a code on every sign-in
+                <span style={{ fontSize: "11px", color: requireTotp ? "#7bb97b" : "#878787", border: `1px solid ${requireTotp ? "#2c3a2c" : "#333"}`, borderRadius: 4, padding: "0 6px" }}>
+                  {requireTotp ? "on" : "off"}
+                </span>
+              </div>
+              <div style={{ color: "#878787", fontSize: "11px", marginTop: 2 }}>
+                {requireTotp
+                  ? "Your original passkey also asks for an authenticator code."
+                  : "Your original passkey signs you in with one tap."}
+              </div>
+            </div>
+            {mode.kind === "totp-on" || mode.kind === "totp-off" ? null : (
+              <button
+                className="btn btn-cancel"
+                onClick={() => resetForm({ kind: requireTotp ? "totp-off" : "totp-on" })}
+                style={{ padding: "0.35rem 0.9rem", fontSize: "12px" }}
+              >
+                {requireTotp ? "turn off" : "turn on"}
+              </button>
+            )}
+          </div>
+        )}
+
+        {mode.kind === "totp-on" && (
+          <form onSubmit={onToggleTotp} style={{ display: "flex", flexDirection: "column", gap: "0.75rem", marginTop: "0.75rem" }}>
+            <p style={{ color: "#878787", fontSize: "13px", margin: 0, lineHeight: 1.6 }}>
+              Enter a code from your authenticator to confirm it works — otherwise turning this on
+              could lock you out of every future sign-in.
+            </p>
+            <input
+              className="inpt"
+              inputMode="numeric"
+              pattern="[0-9]{6}"
+              maxLength={6}
+              placeholder="authenticator code"
+              autoComplete="one-time-code"
+              value={totpCode}
+              onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ""))}
+              required
+              style={{ fontFamily: "ui-monospace, monospace", letterSpacing: "0.2em" }}
+            />
+            {error && <div style={{ color: "#e06a6a", fontSize: "13px" }}>{error}</div>}
+            <div style={{ display: "flex", gap: "0.5rem" }}>
+              <button className="btn btn-primary" type="submit" disabled={busy || totpCode.length !== 6} style={{ padding: "0.5rem 1.25rem" }}>
+                {busy ? "Working…" : "Turn on"}
+              </button>
+              <button type="button" className="btn btn-cancel" onClick={() => resetForm({ kind: "view" })} style={{ padding: "0.5rem 1.25rem" }}>
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
+
+        {mode.kind === "totp-off" && (
+          <GateForm
+            words={words}
+            setWords={setWords}
+            totpCode={totpCode}
+            setTotpCode={setTotpCode}
+            busy={busy}
+            error={error}
+            onSubmit={onToggleTotp}
+            onCancel={() => resetForm({ kind: "view" })}
+            submitLabel="Turn off"
+            danger
+          />
+        )}
       </div>
     </div>
   );

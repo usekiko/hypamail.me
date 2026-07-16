@@ -40,8 +40,12 @@ async function init(): Promise<void> {
       wrapped_key_recovery TEXT NOT NULL,
       recovery_auth_hash   TEXT NOT NULL,
       totp_secret_enc      TEXT NOT NULL,
+      require_totp_on_login BOOLEAN NOT NULL DEFAULT false,
       created_at           TIMESTAMPTZ NOT NULL DEFAULT now()
     );
+    -- Opt-in: also demand a TOTP code when signing in with the original passkey
+    -- (added passkeys always demand one regardless).
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS require_totp_on_login BOOLEAN NOT NULL DEFAULT false;
     CREATE TABLE IF NOT EXISTS webauthn_credentials (
       id              TEXT PRIMARY KEY,
       user_id         BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -153,6 +157,7 @@ export interface UserRow {
   wrappedKeyRecovery: string;
   recoveryAuthHash: string;
   totpSecretEnc: string;
+  requireTotpOnLogin: boolean;
 }
 
 function toUser(r: Record<string, unknown>): UserRow {
@@ -166,10 +171,17 @@ function toUser(r: Record<string, unknown>): UserRow {
     wrappedKeyRecovery: r.wrapped_key_recovery as string,
     recoveryAuthHash: r.recovery_auth_hash as string,
     totpSecretEnc: r.totp_secret_enc as string,
+    requireTotpOnLogin: !!r.require_totp_on_login,
   };
 }
 
-export async function createUser(u: Omit<UserRow, "id">): Promise<string> {
+// Defaults to false for new accounts; toggled from Settings.
+export async function setRequireTotpOnLogin(userId: string, value: boolean): Promise<void> {
+  await db();
+  await getPool().query(`UPDATE users SET require_totp_on_login = $2 WHERE id = $1`, [userId, value]);
+}
+
+export async function createUser(u: Omit<UserRow, "id" | "requireTotpOnLogin">): Promise<string> {
   await db();
   const r = await getPool().query(
     `INSERT INTO users (username, email, account_id, enc_mail_password, pgp_public_key,

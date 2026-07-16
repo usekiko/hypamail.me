@@ -43,6 +43,7 @@ import {
   countCredentialsForUser,
   listCredentialMeta,
   removeCredential,
+  setRequireTotpOnLogin,
   recoveryHashMatches,
   hashIp,
   isRateLimited,
@@ -290,7 +291,8 @@ export async function loginBegin(): Promise<{ optionsJSON: unknown }> {
 export interface LoginCompleteResult {
   error?: string;
   ok?: boolean;
-  needTotp?: boolean; // non-original passkey: prove TOTP before the session is issued
+  needTotp?: boolean; // prove TOTP before the session is issued
+  totpReason?: "added-passkey" | "always-on";
   wrappedKeyPrf?: string | null;
   wrappedKeyRecovery?: string;
   prfCapable?: boolean;
@@ -319,16 +321,16 @@ export async function loginComplete(payload: {
 
   await touchCredential(credential.id, newCounter);
 
-  // Only the original (signup) passkey logs in with a single tap. Any passkey
-  // added later must also pass a TOTP code — we've proven possession, but hold
-  // the session until the second factor is in.
-  if (!credential.isOriginal) {
+  // Only the original (signup) passkey logs in with a single tap, and only while
+  // the account hasn't opted into a TOTP code on every sign-in. Otherwise we've
+  // proven possession but hold the session until the second factor is in.
+  if (!credential.isOriginal || user.requireTotpOnLogin) {
     await setCeremony({
       kind: "login-totp",
       challenge: "", // unused; the passkey is already verified
       userId: user.id,
     });
-    return { needTotp: true };
+    return { needTotp: true, totpReason: credential.isOriginal ? "always-on" : "added-passkey" };
   }
 
   await createSession(user.id, user.email);
@@ -465,10 +467,62 @@ async function manageGate(
   return { user };
 }
 
-export async function listPasskeys(): Promise<{ error?: string; passkeys?: CredentialMeta[]; max?: number }> {
+export async function listPasskeys(): Promise<{
+  error?: string;
+  passkeys?: CredentialMeta[];
+  max?: number;
+  requireTotpOnLogin?: boolean;
+}> {
   const session = await getSession();
   if (!session) return { error: "Not signed in." };
-  return { passkeys: await listCredentialMeta(session.userId), max: MAX_PASSKEYS };
+  return {
+    passkeys: await listCredentialMeta(session.userId),
+    max: MAX_PASSKEYS,
+    requireTotpOnLogin: session.user.requireTotpOnLogin,
+  };
+}
+
+// Toggle "ask for a TOTP code on every sign-in, including the original passkey".
+//
+// The two directions are gated differently on purpose:
+//   - Turning it ON only needs a current TOTP code. It's a hardening step, so it
+//     shouldn't cost 12 words — but requiring a live code proves the authenticator
+//     actually works, which is what stops someone locking themselves out of every
+//     future sign-in.
+//   - Turning it OFF is a downgrade, so it needs the full recovery + TOTP gate:
+//     someone who steals a live session must not be able to quietly weaken logins.
+export async function setLoginTotpRequired(payload: {
+  enable: boolean;
+  totpCode: string;
+  recoveryAuthKey?: string;
+}): Promise<{ error?: string; ok?: boolean }> {
+  if (payload.enable) {
+    const session = await getSession();
+    if (!session) return { error: "Not signed in." };
+
+    const ipHash = await clientIpHash();
+    const userKeyHash = hashIp(`user:${session.userId}`);
+    if (
+      (await isRateLimited(ipHash, "manage", MANAGE_MAX, MANAGE_WINDOW)) ||
+      (await isRateLimited(userKeyHash, "manage", MANAGE_MAX, MANAGE_WINDOW))
+    ) {
+      return { error: "Too many attempts. Please wait a few minutes and try again." };
+    }
+    if (!verifyTotp(decryptSecret(session.user.totpSecretEnc), payload.totpCode)) {
+      await recordAttempt(ipHash, "manage");
+      await recordAttempt(userKeyHash, "manage");
+      return { error: "Wrong authenticator code." };
+    }
+    await clearAttempts(ipHash, "manage");
+    await clearAttempts(userKeyHash, "manage");
+    await setRequireTotpOnLogin(session.userId, true);
+    return { ok: true };
+  }
+
+  const gate = await manageGate(payload.recoveryAuthKey ?? "", payload.totpCode);
+  if ("error" in gate) return { error: gate.error };
+  await setRequireTotpOnLogin(gate.user.id, false);
+  return { ok: true };
 }
 
 export async function addPasskeyBegin(payload: {
