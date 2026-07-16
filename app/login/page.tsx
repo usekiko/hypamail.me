@@ -121,7 +121,7 @@ export default function LoginPage() {
     setError(null);
     setBusy(true);
     try {
-      const res = await loginTotp({ credentialId: ctx.credentialId, totpCode });
+      const res = await loginTotp({ totpCode });
       if (!res.ok) {
         setError(res.error || "Sign-in failed.");
         return;

@@ -378,6 +378,7 @@ export async function loginComplete(payload: {
       kind: "login-totp",
       challenge: "", // unused; the passkey is already verified
       userId: user.id,
+      credentialId: credential.id,
     });
     return { needTotp: true, totpReason: credential.isOriginal ? "always-on" : "added-passkey" };
   }
@@ -394,11 +395,12 @@ export async function loginComplete(payload: {
 // Second step for a non-original passkey login: the TOTP gate. The passkey was
 // already verified in loginComplete; this issues the session on a valid code.
 export async function loginTotp(payload: {
-  credentialId: string;
   totpCode: string;
 }): Promise<LoginCompleteResult> {
   const ceremony = await takeCeremony("login-totp");
-  if (!ceremony?.userId) return { error: "Login session expired — start again." };
+  if (!ceremony?.userId || !ceremony.credentialId) {
+    return { error: "Login session expired — start again." };
+  }
 
   const ipHash = await clientIpHash();
   const userKeyHash = hashIp(`user:${ceremony.userId}`);
@@ -409,8 +411,10 @@ export async function loginTotp(payload: {
     return { error: "Too many attempts. Please wait a few minutes and try again." };
   }
 
+  // Both come from the ceremony, not the client: the credential here must be the
+  // one loginComplete actually verified, not just any passkey on the account.
   const user = await getUserById(ceremony.userId);
-  const credential = await getCredential(payload.credentialId);
+  const credential = await getCredential(ceremony.credentialId);
   if (!user || !credential || credential.userId !== user.id) {
     return { error: "Login session expired — start again." };
   }

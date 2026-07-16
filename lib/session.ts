@@ -96,6 +96,7 @@ export interface CeremonyData extends JWTPayload {
   invite?: string;
   totpSecret?: string; // base32, pending user confirmation during signup
   userId?: string;
+  credentialId?: string; // the passkey already verified, carried into the TOTP step
 }
 
 export async function setCeremony(data: CeremonyData): Promise<void> {

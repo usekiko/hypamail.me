@@ -23,6 +23,11 @@ export async function GET(
   return new NextResponse(raw, {
     headers: {
       "Content-Type": "application/octet-stream",
+      // Never let a browser sniff a message body back into HTML and run it on
+      // our origin: this is attacker-supplied content and only the client-side
+      // sanitizer is allowed to decide what renders.
+      "X-Content-Type-Options": "nosniff",
+      "Content-Disposition": "attachment",
       "Cache-Control": "no-store",
     },
   });
