@@ -15,6 +15,7 @@ import {
   recoveryWordsValid,
   storeMailKey,
 } from "@/lib/client/crypto";
+import RecoveryWordsInput from "./RecoveryWordsInput";
 
 export default function Unlock({ onUnlocked }: { onUnlocked: (key: string) => void }) {
   const [busy, setBusy] = useState(false);
@@ -110,17 +111,7 @@ export default function Unlock({ onUnlocked }: { onUnlocked: (key: string) => vo
           Use recovery words instead
         </summary>
         <form onSubmit={viaWords} style={{ marginTop: "0.75rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-          <textarea
-            className="inpt"
-            rows={2}
-            placeholder="twelve words separated by spaces"
-            value={words}
-            onChange={(e) => setWords(e.target.value)}
-            autoComplete="off"
-            autoCapitalize="none"
-            spellCheck={false}
-            style={{ height: "auto", padding: "9px 10px", fontFamily: "ui-monospace, monospace", resize: "vertical" }}
-          />
+          <RecoveryWordsInput value={words} onChange={setWords} disabled={busy} />
           <button className="btn btn-cancel" type="submit" disabled={busy || !words.trim()} style={{ padding: "0.5rem" }}>
             Unlock
           </button>

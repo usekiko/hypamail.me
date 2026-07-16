@@ -22,6 +22,7 @@ import {
   loadMailKey,
 } from "@/lib/client/crypto";
 import PasskeyHelp from "../../ui/PasskeyHelp";
+import RecoveryWordsInput from "../../ui/RecoveryWordsInput";
 
 interface Passkey {
   id: string;
@@ -65,18 +66,7 @@ function GateForm({
       <p style={{ color: "#878787", fontSize: "13px", margin: 0, lineHeight: 1.6 }}>
         For your security this needs your recovery code and an authenticator code.
       </p>
-      <textarea
-        className="inpt"
-        rows={2}
-        placeholder="your 12 recovery words"
-        value={words}
-        onChange={(e) => setWords(e.target.value)}
-        autoComplete="off"
-        autoCapitalize="none"
-        spellCheck={false}
-        required
-        style={{ height: "auto", padding: "9px 10px", fontFamily: "ui-monospace, monospace", resize: "vertical" }}
-      />
+      <RecoveryWordsInput value={words} onChange={setWords} disabled={busy} />
       <input
         className="inpt"
         inputMode="numeric"
@@ -293,17 +283,27 @@ export default function SettingsPage() {
         )}
 
         {mode.kind === "add" && (
-          <GateForm
-            words={words}
-            setWords={setWords}
-            totpCode={totpCode}
-            setTotpCode={setTotpCode}
-            busy={busy}
-            error={error}
-            onSubmit={onAdd}
-            onCancel={() => resetForm({ kind: "view" })}
-            submitLabel="Create passkey"
-          />
+          <div style={{ marginTop: "0.75rem" }}>
+            <div style={{ display: "flex", gap: "8px", alignItems: "flex-start", padding: "9px 12px", borderRadius: 6, background: "rgba(123,185,123,0.08)", color: "#9ac79a", fontSize: "12px", lineHeight: 1.6 }}>
+              <span className="icon" style={{ fontSize: "16px", marginTop: "1px" }}>info</span>
+              <span>
+                Adding a passkey <b>won&apos;t reset your recovery code or your authenticator</b>
+                {" "}— both stay exactly as they are. You&apos;re only entering them here to prove
+                it&apos;s you.
+              </span>
+            </div>
+            <GateForm
+              words={words}
+              setWords={setWords}
+              totpCode={totpCode}
+              setTotpCode={setTotpCode}
+              busy={busy}
+              error={error}
+              onSubmit={onAdd}
+              onCancel={() => resetForm({ kind: "view" })}
+              submitLabel="Create passkey"
+            />
+          </div>
         )}
 
         {mode.kind === "view" && (

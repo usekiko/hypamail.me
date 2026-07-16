@@ -20,12 +20,14 @@ import {
   loadMailKey,
 } from "@/lib/client/crypto";
 import PasskeyHelp from "../ui/PasskeyHelp";
+import RecoveryWordsInput from "../ui/RecoveryWordsInput";
 
 export default function RecoverPage() {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [recovered, setRecovered] = useState(false);
+  const [words, setWords] = useState("");
   // Kept after a successful recovery so we can gate the add-passkey step.
   const [recoveryAuthKey, setRecoveryAuthKey] = useState<string | null>(null);
   const [addTotp, setAddTotp] = useState("");
@@ -35,7 +37,7 @@ export default function RecoverPage() {
     setError(null);
     const fd = new FormData(e.currentTarget);
     const username = String(fd.get("username") || "");
-    const wordsStr = String(fd.get("words") || "");
+    const wordsStr = words;
     const totpCode = String(fd.get("totp") || "");
     if (!recoveryWordsValid(wordsStr)) {
       setError("That doesn't look like a valid 12-word recovery code.");
@@ -153,17 +155,7 @@ export default function RecoverPage() {
               </div>
               <div>
                 <label className="field-label">Recovery code (12 words)</label>
-                <textarea
-                  className="inpt"
-                  name="words"
-                  rows={2}
-                  placeholder="twelve words separated by spaces"
-                  autoComplete="off"
-                  autoCapitalize="none"
-                  spellCheck={false}
-                  required
-                  style={{ height: "auto", padding: "9px 10px", fontFamily: "ui-monospace, monospace", resize: "vertical" }}
-                />
+                <RecoveryWordsInput value={words} onChange={setWords} disabled={busy} />
               </div>
               <div>
                 <label className="field-label">Authenticator code</label>

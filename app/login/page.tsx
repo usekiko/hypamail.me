@@ -19,6 +19,7 @@ import {
   storeMailKey,
 } from "@/lib/client/crypto";
 import PasskeyHelp from "../ui/PasskeyHelp";
+import RecoveryWordsInput from "../ui/RecoveryWordsInput";
 
 type Phase = "idle" | "totp" | "words";
 
@@ -174,18 +175,7 @@ export default function LoginPage() {
               You&apos;re signed in, but this browser couldn&apos;t unlock your encrypted mail
               with the passkey alone. Enter your 12 recovery words once to unlock it here.
             </p>
-            <textarea
-              className="inpt"
-              rows={2}
-              placeholder="twelve words separated by spaces"
-              value={words}
-              onChange={(e) => setWords(e.target.value)}
-              autoComplete="off"
-              autoCapitalize="none"
-              spellCheck={false}
-              required
-              style={{ height: "auto", padding: "9px 10px", fontFamily: "ui-monospace, monospace", resize: "vertical" }}
-            />
+            <RecoveryWordsInput value={words} onChange={setWords} disabled={busy} />
             {error && <div style={{ color: "#e06a6a", fontSize: "13px" }}>{error}</div>}
             <button className="btn btn-primary" type="submit" disabled={busy} style={{ width: "100%", padding: "0.55rem" }}>
               {busy ? "Unlocking…" : "Unlock mail"}
