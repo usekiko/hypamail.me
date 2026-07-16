@@ -9,7 +9,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { loginBegin, loginComplete, loginTotp, setPrfWrap } from "../actions";
+import { loginBegin, loginBeginForDevice, loginComplete, loginTotp, setPrfWrap } from "../actions";
 import {
   webauthnGet,
   unwrapWithPrf,
@@ -31,6 +31,8 @@ export default function LoginPage() {
   const [totpCode, setTotpCode] = useState("");
   const [totpReason, setTotpReason] = useState<"added-passkey" | "always-on" | null>(null);
   const [words, setWords] = useState("");
+  const [deviceUser, setDeviceUser] = useState("");
+  const [showDevice, setShowDevice] = useState(false);
   // Carried between steps within one attempt.
   const [ctx, setCtx] = useState<{
     prfOutput: ArrayBuffer | null;
@@ -54,30 +56,59 @@ export default function LoginPage() {
     setPhase("words");
   }
 
+  // Shared tail of both sign-in routes, once the authenticator has answered.
+  async function afterAssertion(got: Awaited<ReturnType<typeof webauthnGet>>) {
+    const res = await loginComplete({ assertion: got.responseJSON });
+    if (res.error) {
+      setError(res.error);
+      return;
+    }
+    setCtx({ prfOutput: got.prfOutput, credentialId: got.credentialId });
+    if (res.needTotp) {
+      setTotpReason(res.totpReason ?? null);
+      setPhase("totp");
+      return;
+    }
+    await finishUnlock(res, got.prfOutput);
+  }
+
+  function assertionError(err: unknown) {
+    setError(
+      err instanceof DOMException && err.name === "NotAllowedError"
+        ? "Sign-in was cancelled, or no passkey was offered — if yours is on your phone or a security key, use the option below."
+        : "Couldn't reach a passkey here. Try the option below, or account recovery."
+    );
+  }
+
+  // Usernameless: only surfaces passkeys the browser can enumerate locally.
   async function onPasskey() {
     setError(null);
     setBusy(true);
     try {
       const { optionsJSON } = await loginBegin();
-      const got = await webauthnGet(optionsJSON);
-      const res = await loginComplete({ assertion: got.responseJSON });
-      if (res.error) {
-        setError(res.error);
-        return;
-      }
-      setCtx({ prfOutput: got.prfOutput, credentialId: got.credentialId });
-      if (res.needTotp) {
-        setTotpReason(res.totpReason ?? null);
-        setPhase("totp");
-        return;
-      }
-      await finishUnlock(res, got.prfOutput);
+      await afterAssertion(await webauthnGet(optionsJSON));
     } catch (err) {
-      setError(
-        err instanceof DOMException && err.name === "NotAllowedError"
-          ? "Sign-in was cancelled — try again."
-          : "No usable passkey here? Use account recovery below, or see the help under the button."
-      );
+      assertionError(err);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Username-first: sends allowCredentials with the stored transports, which is
+  // what lets the browser offer a passkey living on a phone or a security key.
+  async function onDevice(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
+    setBusy(true);
+    try {
+      const begin = await loginBeginForDevice({ username: deviceUser });
+      if (begin.error || !begin.optionsJSON) {
+        setError(begin.error || "Could not start sign-in.");
+        return;
+      }
+      await afterAssertion(await webauthnGet(begin.optionsJSON));
+    } catch (err) {
+      assertionError(err);
     } finally {
       setBusy(false);
     }
@@ -193,6 +224,36 @@ export default function LoginPage() {
               {busy ? "Waiting for your device…" : "Sign in with passkey"}
             </button>
             {error && <div style={{ color: "#e06a6a", fontSize: "13px", marginTop: "0.75rem" }}>{error}</div>}
+
+            {showDevice ? (
+              <form onSubmit={onDevice} style={{ display: "flex", flexDirection: "column", gap: "0.75rem", marginTop: "1rem" }}>
+                <p style={{ color: "#878787", fontSize: "13px", margin: 0, lineHeight: 1.6 }}>
+                  Enter your username and we&apos;ll offer your phone (via QR code) or your
+                  security key. Your browser can&apos;t find a passkey that lives on another
+                  device on its own.
+                </p>
+                <input
+                  className="inpt"
+                  placeholder="Username"
+                  value={deviceUser}
+                  onChange={(e) => setDeviceUser(e.target.value.trim().toLowerCase())}
+                  autoComplete="username webauthn"
+                  autoCapitalize="none"
+                  required
+                />
+                <button className="btn btn-primary" type="submit" disabled={busy || !deviceUser} style={{ width: "100%", padding: "0.55rem" }}>
+                  {busy ? "Waiting for your device…" : "Continue"}
+                </button>
+              </form>
+            ) : (
+              <button
+                onClick={() => { setShowDevice(true); setError(null); }}
+                style={{ background: "none", border: "none", padding: 0, marginTop: "0.9rem", color: "#bbb", fontSize: "13px", cursor: "pointer", textDecoration: "underline" }}
+              >
+                Passkey on your phone or a security key?
+              </button>
+            )}
+
             <PasskeyHelp />
           </>
         )}

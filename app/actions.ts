@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
-import { createHash } from "crypto";
+import { createHash, randomBytes } from "crypto";
 import {
   provisionAccount,
   deleteAccount,
@@ -51,6 +51,7 @@ import {
   clearAttempts,
   MAX_PASSKEYS,
   type CredentialMeta,
+  type CredentialRow,
 } from "@/lib/db";
 import type {
   RegistrationResponseJSON,
@@ -70,6 +71,9 @@ const LOGIN_TOTP_MAX = 6;
 const LOGIN_TOTP_WINDOW = 600;
 const MANAGE_MAX = 6;
 const MANAGE_WINDOW = 600;
+// Username-first sign-in lookups (see loginBeginForDevice).
+const LOGIN_LOOKUP_MAX = 12;
+const LOGIN_LOOKUP_WINDOW = 600;
 
 // Real client IP. We trust ONLY Cloudflare's CF-Connecting-IP, which Cloudflare
 // sets authoritatively and a client cannot override. We deliberately do NOT fall
@@ -284,6 +288,50 @@ export async function signupComplete(payload: {
 
 export async function loginBegin(): Promise<{ optionsJSON: unknown }> {
   const options = await authenticationOptions();
+  await setCeremony({ kind: "login", challenge: options.challenge });
+  return { optionsJSON: options };
+}
+
+// A decoy credential for unknown usernames, so loginBeginForDevice can't be used
+// to probe which accounts exist: the ceremony looks identical and simply fails at
+// the authenticator.
+function decoyCredential(): CredentialRow {
+  return {
+    id: randomBytes(32).toString("base64url"),
+    userId: "0",
+    publicKey: "",
+    counter: 0,
+    transports: ["hybrid", "internal"],
+    prfCapable: false,
+    wrappedKeyPrf: null,
+    isOriginal: false,
+  };
+}
+
+// Username-first sign-in, for when the passkey lives on another device — a phone,
+// or a security key.
+//
+// The usernameless request above sends an empty allowCredentials, which only lets
+// the browser offer passkeys it can enumerate locally. A desktop with no platform
+// passkey store (Linux, or any machine you've never signed in on) therefore has
+// nothing to list and no reason to offer the phone/QR flow, even though the
+// passkey exists. Naming the account lets us send allowCredentials carrying the
+// transports we recorded at registration — "hybrid" for a phone — which is what
+// makes the browser offer to reach it.
+export async function loginBeginForDevice(payload: {
+  username: string;
+}): Promise<{ error?: string; optionsJSON?: unknown }> {
+  const username = String(payload.username || "").trim().toLowerCase();
+
+  const ipHash = await clientIpHash();
+  if (await isRateLimited(ipHash, "login-lookup", LOGIN_LOOKUP_MAX, LOGIN_LOOKUP_WINDOW)) {
+    return { error: "Too many attempts. Please wait a few minutes and try again." };
+  }
+  await recordAttempt(ipHash, "login-lookup");
+
+  const user = await getUserByUsername(username);
+  const creds = user ? await getCredentialsForUser(user.id) : [];
+  const options = await authenticationOptions(creds.length ? creds : [decoyCredential()]);
   await setCeremony({ kind: "login", challenge: options.challenge });
   return { optionsJSON: options };
 }
