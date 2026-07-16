@@ -2,8 +2,9 @@
 
 // Passkey management. Adding or removing a passkey always requires the recovery
 // code + a TOTP code (even though you're signed in), so a stolen session can't
-// enroll or strip a device. Max 3 passkeys; only the original (signup) passkey
-// logs in with a single tap, the rest also ask for a TOTP code at login.
+// enroll or strip a device. Max 3 passkeys. The original (signup) passkey is
+// permanent — it's the only one that logs in with a single tap, so it can't be
+// removed; the rest also ask for a TOTP code at login.
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -31,6 +32,80 @@ interface Passkey {
 }
 
 type Mode = { kind: "view" } | { kind: "add" } | { kind: "remove"; id: string };
+
+// NOTE: defined at module scope, NOT inside SettingsPage. A component declared
+// inside another component gets a new identity on every render, so React would
+// unmount/remount these inputs on each keystroke and they'd lose focus after a
+// single character.
+function GateForm({
+  words,
+  setWords,
+  totpCode,
+  setTotpCode,
+  busy,
+  error,
+  onSubmit,
+  onCancel,
+  submitLabel,
+  danger,
+}: {
+  words: string;
+  setWords: (v: string) => void;
+  totpCode: string;
+  setTotpCode: (v: string) => void;
+  busy: boolean;
+  error: string | null;
+  onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
+  onCancel: () => void;
+  submitLabel: string;
+  danger?: boolean;
+}) {
+  return (
+    <form onSubmit={onSubmit} style={{ display: "flex", flexDirection: "column", gap: "0.75rem", marginTop: "0.75rem" }}>
+      <p style={{ color: "#878787", fontSize: "13px", margin: 0, lineHeight: 1.6 }}>
+        For your security this needs your recovery code and an authenticator code.
+      </p>
+      <textarea
+        className="inpt"
+        rows={2}
+        placeholder="your 12 recovery words"
+        value={words}
+        onChange={(e) => setWords(e.target.value)}
+        autoComplete="off"
+        autoCapitalize="none"
+        spellCheck={false}
+        required
+        style={{ height: "auto", padding: "9px 10px", fontFamily: "ui-monospace, monospace", resize: "vertical" }}
+      />
+      <input
+        className="inpt"
+        inputMode="numeric"
+        pattern="[0-9]{6}"
+        maxLength={6}
+        placeholder="authenticator code"
+        autoComplete="one-time-code"
+        value={totpCode}
+        onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ""))}
+        required
+        style={{ fontFamily: "ui-monospace, monospace", letterSpacing: "0.2em" }}
+      />
+      {error && <div style={{ color: "#e06a6a", fontSize: "13px" }}>{error}</div>}
+      <div style={{ display: "flex", gap: "0.5rem" }}>
+        <button
+          className={danger ? "btn btn-cancel" : "btn btn-primary"}
+          type="submit"
+          disabled={busy || totpCode.length !== 6 || !words.trim()}
+          style={{ padding: "0.5rem 1.25rem", ...(danger ? { color: "#e06a6a" } : {}) }}
+        >
+          {busy ? "Working…" : submitLabel}
+        </button>
+        <button type="button" className="btn btn-cancel" onClick={onCancel} style={{ padding: "0.5rem 1.25rem" }}>
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
 
 export default function SettingsPage() {
   const [passkeys, setPasskeys] = useState<Passkey[] | null>(null);
@@ -141,60 +216,6 @@ export default function SettingsPage() {
 
   const atMax = passkeys !== null && passkeys.length >= max;
 
-  const GateForm = ({
-    onSubmit,
-    submitLabel,
-    danger,
-  }: {
-    onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
-    submitLabel: string;
-    danger?: boolean;
-  }) => (
-    <form onSubmit={onSubmit} style={{ display: "flex", flexDirection: "column", gap: "0.75rem", marginTop: "0.75rem" }}>
-      <p style={{ color: "#878787", fontSize: "13px", margin: 0, lineHeight: 1.6 }}>
-        For your security this needs your recovery code and an authenticator code.
-      </p>
-      <textarea
-        className="inpt"
-        rows={2}
-        placeholder="your 12 recovery words"
-        value={words}
-        onChange={(e) => setWords(e.target.value)}
-        autoComplete="off"
-        autoCapitalize="none"
-        spellCheck={false}
-        required
-        style={{ height: "auto", padding: "9px 10px", fontFamily: "ui-monospace, monospace", resize: "vertical" }}
-      />
-      <input
-        className="inpt"
-        inputMode="numeric"
-        pattern="[0-9]{6}"
-        maxLength={6}
-        placeholder="authenticator code"
-        autoComplete="one-time-code"
-        value={totpCode}
-        onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ""))}
-        required
-        style={{ fontFamily: "ui-monospace, monospace", letterSpacing: "0.2em" }}
-      />
-      {error && <div style={{ color: "#e06a6a", fontSize: "13px" }}>{error}</div>}
-      <div style={{ display: "flex", gap: "0.5rem" }}>
-        <button
-          className={danger ? "btn btn-cancel" : "btn btn-primary"}
-          type="submit"
-          disabled={busy || totpCode.length !== 6 || !words.trim()}
-          style={{ padding: "0.5rem 1.25rem", ...(danger ? { color: "#e06a6a" } : {}) }}
-        >
-          {busy ? "Working…" : submitLabel}
-        </button>
-        <button type="button" className="btn btn-cancel" onClick={() => resetForm({ kind: "view" })} style={{ padding: "0.5rem 1.25rem" }}>
-          Cancel
-        </button>
-      </div>
-    </form>
-  );
-
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "12px" }}>
@@ -210,9 +231,10 @@ export default function SettingsPage() {
           </span>
         </div>
         <p style={{ color: "#878787", fontSize: "13px", margin: "0 0 1rem", lineHeight: 1.6 }}>
-          Your <b style={{ color: "#ddd" }}>original</b> passkey signs you in with one tap. Passkeys
-          you add here also ask for an authenticator code when signing in. Adding or removing a
-          passkey always needs your recovery code + authenticator code.
+          Your <b style={{ color: "#ddd" }}>original</b> passkey signs you in with one tap and is
+          permanent. Passkeys you add here also ask for an authenticator code when signing in, and
+          can be removed. Adding or removing a passkey always needs your recovery code +
+          authenticator code.
         </p>
 
         {notice && <div style={{ color: "#7bb97b", fontSize: "13px", marginBottom: "0.75rem" }}>{notice}</div>}
@@ -235,7 +257,10 @@ export default function SettingsPage() {
                     {p.lastUsedAt ? ` · last used ${new Date(p.lastUsedAt).toLocaleDateString()}` : " · not used yet"}
                   </div>
                 </div>
-                {mode.kind === "remove" && mode.id === p.id ? null : (
+                {/* The original passkey is permanent and has no remove button. */}
+                {p.isOriginal ? (
+                  <span style={{ color: "#5a5a5a", fontSize: "11px" }}>permanent</span>
+                ) : mode.kind === "remove" && mode.id === p.id ? null : (
                   <button
                     className="btn btn-cancel"
                     onClick={() => resetForm({ kind: "remove", id: p.id })}
@@ -252,11 +277,34 @@ export default function SettingsPage() {
         {mode.kind === "remove" && (
           <div style={{ marginTop: "0.75rem", padding: "12px", borderRadius: 6, border: "1px solid #3a2c2c" }}>
             <div style={{ fontSize: "13px", color: "#e06a6a" }}>Remove this passkey?</div>
-            <GateForm onSubmit={onRemove} submitLabel="Remove passkey" danger />
+            <GateForm
+              words={words}
+              setWords={setWords}
+              totpCode={totpCode}
+              setTotpCode={setTotpCode}
+              busy={busy}
+              error={error}
+              onSubmit={onRemove}
+              onCancel={() => resetForm({ kind: "view" })}
+              submitLabel="Remove passkey"
+              danger
+            />
           </div>
         )}
 
-        {mode.kind === "add" && <GateForm onSubmit={onAdd} submitLabel="Create passkey" />}
+        {mode.kind === "add" && (
+          <GateForm
+            words={words}
+            setWords={setWords}
+            totpCode={totpCode}
+            setTotpCode={setTotpCode}
+            busy={busy}
+            error={error}
+            onSubmit={onAdd}
+            onCancel={() => resetForm({ kind: "view" })}
+            submitLabel="Create passkey"
+          />
+        )}
 
         {mode.kind === "view" && (
           <div style={{ marginTop: "1rem" }}>

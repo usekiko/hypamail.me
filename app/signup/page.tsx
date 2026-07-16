@@ -79,8 +79,38 @@ export default function SignupPage() {
   const [error, setError] = useState<string | null>(null);
   const [wiz, setWiz] = useState<WizardState | null>(null);
   const [wordsSaved, setWordsSaved] = useState(false);
+  const [downloaded, setDownloaded] = useState(false);
   const [totpCode, setTotpCode] = useState("");
   const qrRef = useRef<HTMLCanvasElement>(null);
+
+  // Save the recovery code as a plain-text file. This is the user's only copy —
+  // the server never sees these words, so there is nothing to re-send later.
+  function downloadRecoveryCode() {
+    if (!wiz?.words || !wiz.begin.email) return;
+    const body = [
+      "hypamail recovery code",
+      "======================",
+      "",
+      `Address: ${wiz.begin.email}`,
+      "",
+      "These 12 words are the ONLY way back into your account if you lose your",
+      "devices, and the only backup key to your encrypted mail. Anyone with them",
+      "plus your authenticator can read your mail. Keep this file private and",
+      "offline. We cannot reset or recover it for you.",
+      "",
+      ...wiz.words.split(" ").map((w, i) => `${String(i + 1).padStart(2, " ")}. ${w}`),
+      "",
+    ].join("\n");
+    const url = URL.createObjectURL(new Blob([body], { type: "text/plain" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `hypamail-recovery-${wiz.begin.email.split("@")[0]}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    setDownloaded(true);
+  }
 
   useEffect(() => {
     if (step === "totp" && qrRef.current && wiz?.begin.totpUri) {
@@ -221,28 +251,43 @@ export default function SignupPage() {
           back into your account if you lose your devices — and the only backup key to your mail.
           We can&apos;t reset or recover them. They will not be shown again.
         </p>
-        <div className="panel" style={{ padding: "14px", marginBottom: "1.25rem", userSelect: "all" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "8px 14px", fontFamily: "ui-monospace, monospace", fontSize: "14px" }}>
+        <div className="panel" style={{ padding: "14px", marginBottom: "1rem", userSelect: "all" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "10px 16px", fontFamily: "ui-monospace, monospace", fontSize: "14px" }}>
             {wiz.words.split(" ").map((w, i) => (
-              <span key={i}>
-                <span style={{ color: "#878787", fontSize: "11px", marginRight: 6 }}>{i + 1}.</span>
-                {w}
+              <span key={i} style={{ display: "flex", gap: "6px" }}>
+                <span style={{ color: "#6e6e6e", minWidth: "1.6em", textAlign: "right" }}>{i + 1}.</span>
+                <span>{w}</span>
               </span>
             ))}
           </div>
         </div>
+
+        <button
+          className="btn btn-cancel"
+          onClick={downloadRecoveryCode}
+          style={{ width: "100%", padding: "0.55rem", marginBottom: "1rem", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "6px" }}
+        >
+          <span className="icon" style={{ fontSize: "18px" }}>download</span>
+          {downloaded ? "Downloaded — download again" : "Download recovery code"}
+        </button>
+
         <label style={{ display: "flex", gap: "8px", alignItems: "flex-start", fontSize: "13px", marginBottom: "1.25rem", cursor: "pointer" }}>
           <input type="checkbox" checked={wordsSaved} onChange={(e) => setWordsSaved(e.target.checked)} style={{ marginTop: 2 }} />
-          <span>I wrote down my recovery code. I understand it cannot be recovered for me.</span>
+          <span>I saved my recovery code. I understand it cannot be recovered for me.</span>
         </label>
         <button
           className="btn btn-primary"
-          disabled={!wordsSaved}
+          disabled={!wordsSaved || !downloaded}
           onClick={() => setStep("totp")}
           style={{ width: "100%", padding: "0.55rem" }}
         >
           Continue
         </button>
+        {!downloaded && (
+          <p style={{ color: "#878787", fontSize: "12px", marginTop: "0.6rem", textAlign: "center" }}>
+            Download your recovery code to continue.
+          </p>
+        )}
       </Shell>
     );
   }

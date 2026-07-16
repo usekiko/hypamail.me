@@ -532,6 +532,16 @@ export async function removePasskey(payload: {
 }): Promise<{ error?: string; ok?: boolean }> {
   const gate = await manageGate(payload.recoveryAuthKey, payload.totpCode);
   if ("error" in gate) return { error: gate.error };
+  const cred = await getCredential(payload.credentialId);
+  if (!cred || cred.userId !== gate.user.id) {
+    return { error: "That passkey isn't on your account." };
+  }
+  // The original (signup) passkey is permanent: it's the only credential that
+  // logs in without a TOTP code, and it can never be re-created for an existing
+  // account, so removing it would silently downgrade the account forever.
+  if (cred.isOriginal) {
+    return { error: "Your original passkey is permanent and can't be removed." };
+  }
   const removed = await removeCredential(payload.credentialId, gate.user.id);
   if (!removed) return { error: "That passkey isn't on your account." };
   return { ok: true };

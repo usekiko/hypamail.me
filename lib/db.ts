@@ -282,11 +282,14 @@ export async function listCredentialMeta(userId: string): Promise<CredentialMeta
   }));
 }
 
-// Remove one of a user's own passkeys. Returns false if it wasn't theirs.
+// Remove one of a user's own passkeys. Returns false if it wasn't theirs. The
+// original passkey is permanent, so it is never deletable (belt-and-braces
+// alongside the check in removePasskey).
 export async function removeCredential(id: string, userId: string): Promise<boolean> {
   await db();
   const r = await getPool().query(
-    `DELETE FROM webauthn_credentials WHERE id = $1 AND user_id = $2`,
+    `DELETE FROM webauthn_credentials
+      WHERE id = $1 AND user_id = $2 AND is_original = false`,
     [id, userId]
   );
   return r.rowCount === 1;
