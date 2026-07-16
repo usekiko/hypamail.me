@@ -16,9 +16,11 @@ export const dynamic = "force-dynamic";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={inter.variable}>
+    // `dark` marks the app dark-only: the shared UI primitives resolve their
+    // theme from this class, so they never follow prefers-color-scheme to light.
+    <html lang="en" className={`dark ${inter.variable}`}>
       <head>
-        <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Sharp:opsz,wght,FILL,GRAD@20,600,1,200&amp;display=block" rel="stylesheet" />
+        <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20,500,1,200&amp;display=block" rel="stylesheet" />
       </head>
       <body>{children}</body>
     </html>

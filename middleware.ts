@@ -17,7 +17,8 @@ export default function middleware(request: NextRequest) {
     `script-src 'self' 'nonce-${nonce}' https://challenges.cloudflare.com${process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : ""}`,
     `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com`,
     `img-src 'self' https://r2.hypastack.com`,
-    `font-src 'self' https://fonts.gstatic.com`,
+    // r2 serves the SF Pro Display cuts (@font-face in globals.css).
+    `font-src 'self' https://fonts.gstatic.com https://r2.hypastack.com`,
     `connect-src 'self' https://challenges.cloudflare.com`,
     `frame-src https://challenges.cloudflare.com`,
     `media-src 'none'`,

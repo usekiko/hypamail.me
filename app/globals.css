@@ -1,12 +1,49 @@
 @import "tailwindcss";
 
+/* SF Pro Display — hypamail ships only the Bold and Black Italic cuts, so each
+   is declared across the whole weight range. Every weight therefore resolves to
+   these files rather than snapping to a nearest-match and leaving gaps; the app
+   is intentionally set in the heavy cut throughout. size-adjust matches
+   hypastack so the two apps' text sits at the same optical size. */
+@font-face {
+  font-family: "SF Pro Display";
+  src: url("https://r2.hypastack.com/cdn/mfwvm1ojsza2/SFPRODISPLAYBOLD.OTF") format("opentype");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+  size-adjust: 115%;
+}
+@font-face {
+  font-family: "SF Pro Display";
+  src: url("https://r2.hypastack.com/cdn/l786y3lcmtal/SFPRODISPLAYBLACKITALIC.OTF") format("opentype");
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
+  size-adjust: 115%;
+}
+
+/* Palette mirrors hypastack's tokens so the two apps read as one product.
+   Hypamail is dark-only — <html> carries `dark` so the shared UI primitives
+   (which resolve theme from that class) never flip to light. */
+:root {
+  --background: #000000;
+  --foreground: #f7f8f8;
+  --card: #0a0b0c;
+  --secondary: #1a1b1c;
+  --muted: #111111;
+  --muted-foreground: #898e97;
+  --destructive: #ff3333;
+  --border: rgba(255, 255, 255, 0.1);
+  --radius: 12px;
+}
+
 html,
 body {
   margin: 0;
   padding: 0;
-  background: #000000;
-  color: #fff;
-  font-family: var(--font-inter), Inter, ui-sans-serif, system-ui, sans-serif;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: "SF Pro Display", var(--font-inter), Inter, ui-sans-serif, system-ui, sans-serif;
   font-size: 14px;
   -webkit-font-smoothing: antialiased;
 }
@@ -42,123 +79,98 @@ select {
   box-sizing: border-box;
 }
 
-/* ---------- buttons ---------- */
-.btn {
-  display: inline-block;
-  padding: 0.375rem 0.875rem;
-  font-size: 0.875rem;
-  border: none;
-  border-radius: 0;
-  background: #111;
-  color: #fff;
-  cursor: pointer;
-  text-decoration: none;
+/* ---------- icons ---------- */
+/* Google's stylesheet supplies the font-family; these are hypastack's
+   variation/layout overrides on top of it. */
+.material-symbols-rounded {
+  font-variation-settings: 'FILL' 1, 'wght' 500, 'GRAD' 200, 'opsz' 20;
+  font-size: inherit;
+  color: inherit;
+  vertical-align: middle;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* Clamp to a 1em square and clip so the ligature name (rendered as an
+     invisible fallback during font-display:block) can't reserve extra width
+     and cause the "wide blank → snap" FOUC. */
+  width: 1em;
+  height: 1em;
+  flex-shrink: 0;
+  overflow: hidden;
+  transition: transform 0.15s ease-in-out;
 }
-.btn:hover {
-  text-decoration: none;
+
+button:hover .material-symbols-rounded,
+a:hover .material-symbols-rounded,
+.group:hover .material-symbols-rounded {
+  transform: scale(1.12);
 }
-.btn-primary {
-  background: #2e6f40;
-  color: #fff;
-}
-.btn-cancel {
-  background: #282828;
-  color: #fff;
-}
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+
+/* ---------- surfaces ---------- */
+.panel {
+  background: var(--card);
+  border: 0.7px solid var(--border);
+  border-radius: var(--radius);
 }
 
 /* ---------- table ---------- */
 .tbl {
   width: 100%;
-  overflow-x: hidden;
-  border: none;
-}
-.tbl.no-border {
-  border: none;
+  overflow: hidden;
+  background: var(--card);
+  border: 0.7px solid var(--border);
+  border-radius: var(--radius);
 }
 .tbl table {
   width: 100%;
   border-collapse: collapse;
-  background: #282828;
   font-size: clamp(10px, 1.8vw, 14px);
-  color: #fff;
+  color: var(--foreground);
   table-layout: fixed;
 }
 .tbl th,
 .tbl td {
-  padding: clamp(6px, 1vw, 10px);
+  padding: 10px 12px;
   border: none;
   text-align: left;
-  vertical-align: top;
+  vertical-align: middle;
 }
 .tbl th {
   background: transparent;
-  font-weight: bold;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 500;
   white-space: nowrap;
+  border-bottom: 0.7px solid var(--border);
 }
 .tbl td {
   white-space: normal;
+  border-top: 0.7px solid rgba(255, 255, 255, 0.05);
 }
-.tbl tbody tr:nth-child(odd) {
-  background: transparent;
+.tbl tbody tr:first-child td {
+  border-top: none;
 }
-.tbl tbody tr:nth-child(even) {
-  background: transparent;
+.tbl tbody tr {
+  transition: background-color 0.12s ease;
+}
+.tbl tbody tr:hover {
+  background: rgba(255, 255, 255, 0.04);
 }
 .tbl a {
   color: inherit;
   text-decoration: none;
+  display: block;
 }
 .tbl a:hover {
-  text-decoration: underline;
-}
-
-/* ---------- icons ---------- */
-.icon {
-  font-family: 'Material Symbols Sharp';
-  font-weight: normal;
-  font-style: normal;
-  font-size: 20px;
-  line-height: 1;
-  letter-spacing: normal;
-  text-transform: none;
-  display: inline-block;
-  white-space: nowrap;
-  word-wrap: normal;
-  direction: ltr;
-  font-feature-settings: 'liga';
-  -webkit-font-smoothing: antialiased;
-  vertical-align: middle;
-}
-
-/* ---------- inputs ---------- */
-.inpt {
-  background: #282828;
-  border: none;
-  outline: none;
-  color: #fff;
-  padding: 5px 10px;
-  width: 100%;
-  height: 36px;
-  box-sizing: border-box;
-  font-size: 16px;
-}
-.inpt::placeholder {
-  color: #878787;
+  text-decoration: none;
 }
 
 /* ---------- form helpers ---------- */
 .field-label {
   display: block;
-  color: #b9b9b9;
+  color: var(--muted-foreground);
   font-size: 13px;
+  font-weight: 500;
   margin-bottom: 6px;
-}
-
-.panel {
-  background: #282828;
-  border: none;
 }
