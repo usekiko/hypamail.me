@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { createHash, randomBytes } from "crypto";
+import { inviteRequired } from "@/constants/invite";
 import {
   provisionAccount,
   deleteAccount,
@@ -132,8 +133,6 @@ export async function signupBegin(formData: {
 
   const vErr = validateUsername(username);
   if (vErr) return { error: vErr };
-  // During the open-signup window we ignore invite codes entirely rather than
-  // consuming any that are sent, so nobody burns a code they didn't need.
   const needsInvite = inviteRequired();
   if (needsInvite && !invite) return { error: "An invite code is required." };
 
@@ -143,7 +142,7 @@ export async function signupBegin(formData: {
     return { error: "Bot check failed. Please retry." };
   }
 
-  if (!(await inviteCodeUsable(invite))) {
+  if (needsInvite && !(await inviteCodeUsable(invite))) {
     await recordAttempt(ipHash, "signup");
     return { error: "Invalid or already-used invite code." };
   }
@@ -187,10 +186,12 @@ export async function signupComplete(payload: {
   totpCode: string;
 }): Promise<SignupCompleteResult> {
   const ceremony = await takeCeremony("signup");
-  if (!ceremony?.username || !ceremony.invite || !ceremony.totpSecret) {
+  if (!ceremony?.username || !ceremony.totpSecret) {
     return { error: "Signup session expired — please start over.", fatal: true };
   }
-  const { username, invite, totpSecret } = ceremony;
+  const { username, totpSecret } = ceremony;
+  const invite = ceremony.invite ?? "";
+  const needsInvite = inviteRequired();
   const email = `${username}@${DOMAIN}`;
 
   const ipHash = await clientIpHash();
@@ -228,7 +229,7 @@ export async function signupComplete(payload: {
     return { error: "That username is already taken.", fatal: true };
   }
 
-  if (!(await consumeInviteCode(invite, email))) {
+  if (needsInvite && !(await consumeInviteCode(invite, email))) {
     return { error: "Invalid or already-used invite code.", fatal: true };
   }
 
@@ -239,7 +240,7 @@ export async function signupComplete(payload: {
   try {
     accountId = await provisionAccount(username, mailPassword);
   } catch {
-    await releaseInviteCode(invite);
+    if (needsInvite) await releaseInviteCode(invite);
     if (await usernameTaken(username)) return { error: "That username is already taken.", fatal: true };
     return { error: "Could not create the mailbox. Please try again.", fatal: true };
   }
@@ -252,7 +253,7 @@ export async function signupComplete(payload: {
     try {
       await deleteAccount(username);
     } catch {}
-    await releaseInviteCode(invite);
+    if (needsInvite) await releaseInviteCode(invite);
     return { error: "Could not enable mailbox encryption. Please try again.", fatal: true };
   }
 
