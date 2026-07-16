@@ -6,7 +6,8 @@
 //
 // The value is the space-joined words, so callers keep treating it as one string
 // (the crypto helpers normalise whitespace anyway).
-import { useRef } from "react";
+import { useRef, useState } from "react";
+import { isRecoveryWord } from "@/lib/client/crypto";
 
 const COUNT = 12;
 
@@ -28,9 +29,14 @@ export default function RecoveryWordsInput({
   disabled?: boolean;
 }) {
   const refs = useRef<Array<HTMLInputElement | null>>([]);
+  const [focused, setFocused] = useState<number | null>(null);
   const slots = toSlots(value);
 
   const commit = (next: string[]) => onChange(next.join(" "));
+
+  // Flag a finished word that isn't on the recovery word list. Skipped for the
+  // row being typed in, so it doesn't nag mid-word.
+  const isBad = (i: number) => !!slots[i] && focused !== i && !isRecoveryWord(slots[i]);
 
   function focusSlot(i: number) {
     const el = refs.current[Math.max(0, Math.min(COUNT - 1, i))];
@@ -107,14 +113,14 @@ export default function RecoveryWordsInput({
             alignItems: "center",
             gap: "6px",
             background: "#1a1a1a",
-            border: "1px solid #2a2a2a",
+            border: `1px solid ${isBad(i) ? "#e06a6a" : "#2a2a2a"}`,
             borderRadius: 6,
             padding: "6px 8px",
           }}
         >
           <span
             style={{
-              color: "#6e6e6e",
+              color: isBad(i) ? "#e06a6a" : "#6e6e6e",
               fontSize: "11px",
               minWidth: "1.6em",
               textAlign: "right",
@@ -132,7 +138,10 @@ export default function RecoveryWordsInput({
             onChange={(e) => handleChange(i, e.target.value)}
             onKeyDown={(e) => handleKeyDown(i, e)}
             onPaste={(e) => handlePaste(i, e)}
+            onFocus={() => setFocused(i)}
+            onBlur={() => setFocused((f) => (f === i ? null : f))}
             disabled={disabled}
+            title={isBad(i) ? "Not a word from the recovery list — check for a typo." : undefined}
             autoComplete="off"
             autoCapitalize="none"
             autoCorrect="off"

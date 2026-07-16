@@ -71,6 +71,48 @@ export function recoveryWordsValid(words: string): boolean {
   return validateMnemonic(normalizeWords(words), wordlist);
 }
 
+const WORDSET = new Set(wordlist);
+
+export function isRecoveryWord(word: string): boolean {
+  return WORDSET.has(word.trim().toLowerCase());
+}
+
+// Slot indices (0-based) of filled-in words that aren't on the BIP39 list.
+// NOTE: naming the offending word is deliberate and safe — this check is purely
+// local (it never reaches the server) and the wordlist is public, so an attacker
+// can already run it offline. All it does is save a user hunting a typo across
+// twelve words. The *server's* answer stays deliberately vague; see manageGate.
+export function invalidRecoveryWordIndices(words: string): number[] {
+  return words
+    .split(" ")
+    .map((w, i) => {
+      const c = w.trim().toLowerCase();
+      return c && !WORDSET.has(c) ? i : -1;
+    })
+    .filter((i) => i >= 0);
+}
+
+// A specific, actionable message for a locally-invalid recovery code, or null
+// when the twelve words are well-formed.
+export function recoveryWordsError(words: string): string | null {
+  const bad = invalidRecoveryWordIndices(words);
+  if (bad.length) {
+    const nums = bad.map((i) => i + 1).join(", ");
+    return bad.length === 1
+      ? `Word ${nums} isn't from the recovery word list — check it for a typo.`
+      : `Words ${nums} aren't from the recovery word list — check them for typos.`;
+  }
+  const filled = normalizeWords(words).split(" ").filter(Boolean);
+  if (filled.length < 12) {
+    return `Enter all 12 words — ${filled.length} of 12 so far.`;
+  }
+  if (!recoveryWordsValid(words)) {
+    // Every word is real but the checksum fails: usually a swapped/wrong word.
+    return "These 12 words aren't a valid recovery code — check the spelling and the order.";
+  }
+  return null;
+}
+
 function wordsEntropy(words: string): Uint8Array {
   return mnemonicToEntropy(normalizeWords(words), wordlist);
 }

@@ -18,7 +18,7 @@ import {
   unwrapWithRecovery,
   webauthnCreate,
   wrapWithPrf,
-  recoveryWordsValid,
+  recoveryWordsError,
   loadMailKey,
 } from "@/lib/client/crypto";
 import PasskeyHelp from "../../ui/PasskeyHelp";
@@ -130,8 +130,9 @@ export default function SettingsPage() {
   async function onAdd(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
-    if (!recoveryWordsValid(words)) {
-      setError("That doesn't look like a valid 12-word recovery code.");
+    const wordsErr = recoveryWordsError(words);
+    if (wordsErr) {
+      setError(wordsErr);
       return;
     }
     setBusy(true);
@@ -184,8 +185,9 @@ export default function SettingsPage() {
     e.preventDefault();
     if (mode.kind !== "remove") return;
     setError(null);
-    if (!recoveryWordsValid(words)) {
-      setError("That doesn't look like a valid 12-word recovery code.");
+    const wordsErr = recoveryWordsError(words);
+    if (wordsErr) {
+      setError(wordsErr);
       return;
     }
     setBusy(true);

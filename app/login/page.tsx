@@ -15,7 +15,7 @@ import {
   unwrapWithPrf,
   unwrapWithRecovery,
   wrapWithPrf,
-  recoveryWordsValid,
+  recoveryWordsError,
   storeMailKey,
 } from "@/lib/client/crypto";
 import PasskeyHelp from "../ui/PasskeyHelp";
@@ -102,8 +102,9 @@ export default function LoginPage() {
     e.preventDefault();
     if (!ctx?.wrappedKeyRecovery) return;
     setError(null);
-    if (!recoveryWordsValid(words)) {
-      setError("That doesn't look like a valid 12-word recovery code.");
+    const wordsErr = recoveryWordsError(words);
+    if (wordsErr) {
+      setError(wordsErr);
       return;
     }
     setBusy(true);

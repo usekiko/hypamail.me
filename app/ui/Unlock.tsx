@@ -12,7 +12,7 @@ import {
   unwrapWithPrf,
   unwrapWithRecovery,
   wrapWithPrf,
-  recoveryWordsValid,
+  recoveryWordsError,
   storeMailKey,
 } from "@/lib/client/crypto";
 import RecoveryWordsInput from "./RecoveryWordsInput";
@@ -57,8 +57,9 @@ export default function Unlock({ onUnlocked }: { onUnlocked: (key: string) => vo
   async function viaWords(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
-    if (!recoveryWordsValid(words)) {
-      setError("That doesn't look like a valid 12-word recovery code.");
+    const wordsErr = recoveryWordsError(words);
+    if (wordsErr) {
+      setError(wordsErr);
       return;
     }
     setBusy(true);

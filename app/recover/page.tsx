@@ -13,7 +13,7 @@ import { recoveryLogin, addPasskeyBegin, addPasskeyComplete } from "../actions";
 import {
   deriveRecoveryAuthKey,
   unwrapWithRecovery,
-  recoveryWordsValid,
+  recoveryWordsError,
   webauthnCreate,
   wrapWithPrf,
   storeMailKey,
@@ -39,8 +39,9 @@ export default function RecoverPage() {
     const username = String(fd.get("username") || "");
     const wordsStr = words;
     const totpCode = String(fd.get("totp") || "");
-    if (!recoveryWordsValid(wordsStr)) {
-      setError("That doesn't look like a valid 12-word recovery code.");
+    const wordsErr = recoveryWordsError(wordsStr);
+    if (wordsErr) {
+      setError(wordsErr);
       return;
     }
     setBusy(true);
