@@ -4,6 +4,8 @@
 // session is revoked — otherwise the key would linger in sessionStorage.
 import { logoutAction } from "../actions";
 import { clearMailKey } from "@/lib/client/crypto";
+import { SecondaryButton } from "@/components/ui/secondary-button";
+import { MIcon } from "@/components/ui/material-icon";
 
 export default function SignOut() {
   return (
@@ -12,10 +14,12 @@ export default function SignOut() {
       onSubmit={() => {
         clearMailKey();
       }}
+      style={{ display: "flex" }}
     >
-      <button className="btn btn-cancel" type="submit" style={{ padding: "0.55rem 2rem" }}>
-        sign out
-      </button>
+      <SecondaryButton type="submit" size="sm" title="Sign out">
+        <MIcon name="logout" size={16} style={{ marginRight: 6 }} />
+        Sign out
+      </SecondaryButton>
     </form>
   );
 }

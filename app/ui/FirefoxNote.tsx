@@ -9,6 +9,8 @@
 // Rendered from an effect so the markup matches on the server (where there is no
 // user agent) and only appears for the browsers that actually have the problem.
 import { useEffect, useState } from "react";
+import { AlertMessage } from "@/components/ui/alert-message";
+import { MIcon } from "@/components/ui/material-icon";
 
 export default function FirefoxNote() {
   const [isFirefox, setIsFirefox] = useState(false);
@@ -23,27 +25,15 @@ export default function FirefoxNote() {
   if (!isFirefox) return null;
 
   return (
-    <div
-      style={{
-        display: "flex",
-        gap: "8px",
-        alignItems: "flex-start",
-        padding: "9px 12px",
-        marginTop: "1rem",
-        borderRadius: 6,
-        background: "rgba(216,166,87,0.12)",
-        color: "#d8a657",
-        fontSize: "13px",
-        lineHeight: 1.6,
-      }}
+    <AlertMessage
+      tone="warning"
+      icon={<MIcon name="info" size={16} style={{ flexShrink: 0, marginRight: 8, marginTop: 2 }} />}
+      style={{ marginTop: "1rem", marginBottom: 0, fontSize: 13 }}
     >
-      <span className="icon" style={{ fontSize: "18px", marginTop: "1px" }}>info</span>
-      <span>
-        <b>Firefox can&apos;t show the QR code</b> for signing in with a passkey on your phone
-        {isLinux ? " — on Linux it only supports USB security keys" : ""}. Open hypamail in{" "}
-        <b>Chrome or Brave</b> to use your phone, plug in a security key, or use your recovery
-        code.
-      </span>
-    </div>
+      <b>Firefox can&apos;t show the QR code</b> for signing in with a passkey on your phone
+      {isLinux ? " — on Linux it only supports USB security keys" : ""}. Open hypamail in{" "}
+      <b>Chrome or Brave</b> to use your phone, plug in a security key, or use your recovery
+      code.
+    </AlertMessage>
   );
 }

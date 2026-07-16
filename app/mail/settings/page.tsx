@@ -22,6 +22,11 @@ import {
   recoveryWordsError,
   loadMailKey,
 } from "@/lib/client/crypto";
+import { ShineButton } from "@/components/ui/shine-button";
+import { SecondaryButton } from "@/components/ui/secondary-button";
+import { TextInput } from "@/components/ui/text-input";
+import { AlertMessage } from "@/components/ui/alert-message";
+import { MIcon } from "@/components/ui/material-icon";
 import PasskeyHelp from "../../ui/PasskeyHelp";
 import RecoveryWordsInput from "../../ui/RecoveryWordsInput";
 
@@ -39,6 +44,35 @@ type Mode =
   | { kind: "remove"; id: string }
   | { kind: "totp-on" }
   | { kind: "totp-off" };
+
+// Row inside a panel: slightly raised against the card, hairline border.
+const rowStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  padding: "10px 12px",
+  borderRadius: 8,
+  background: "rgba(255,255,255,0.04)",
+  border: "0.7px solid var(--border)",
+};
+
+// Small status chip ("one-tap", "on"/"off").
+function Chip({ active, children }: { active: boolean; children: React.ReactNode }) {
+  return (
+    <span
+      style={{
+        fontSize: "11px",
+        color: active ? "rgb(187,247,208)" : "var(--muted-foreground)",
+        border: `0.7px solid ${active ? "rgba(34,197,94,0.3)" : "var(--border)"}`,
+        background: active ? "rgba(34,197,94,0.12)" : "transparent",
+        borderRadius: 999,
+        padding: "0 8px",
+      }}
+    >
+      {children}
+    </span>
+  );
+}
 
 // NOTE: defined at module scope, NOT inside SettingsPage. A component declared
 // inside another component gets a new identity on every render, so React would
@@ -69,35 +103,38 @@ function GateForm({
 }) {
   return (
     <form onSubmit={onSubmit} style={{ display: "flex", flexDirection: "column", gap: "0.75rem", marginTop: "0.75rem" }}>
-      <p style={{ color: "#878787", fontSize: "13px", margin: 0, lineHeight: 1.6 }}>
+      <p style={{ color: "var(--muted-foreground)", fontSize: "13px", margin: 0, lineHeight: 1.6 }}>
         For your security this needs your recovery code and an authenticator code.
       </p>
       <RecoveryWordsInput value={words} onChange={setWords} disabled={busy} />
-      <input
-        className="inpt"
+      <TextInput
         inputMode="numeric"
         pattern="[0-9]{6}"
         maxLength={6}
-        placeholder="authenticator code"
+        size="md"
+        placeholder="Authenticator code"
         autoComplete="one-time-code"
         value={totpCode}
         onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ""))}
         required
+        fullWidth
+        leading={<MIcon name="pin" size={16} />}
         style={{ fontFamily: "ui-monospace, monospace", letterSpacing: "0.2em" }}
       />
-      {error && <div style={{ color: "#e06a6a", fontSize: "13px" }}>{error}</div>}
+      {error && <AlertMessage tone="error" style={{ marginBottom: 0 }}>{error}</AlertMessage>}
       <div style={{ display: "flex", gap: "0.5rem" }}>
-        <button
-          className={danger ? "btn btn-cancel" : "btn btn-primary"}
-          type="submit"
-          disabled={busy || totpCode.length !== 6 || !words.trim()}
-          style={{ padding: "0.5rem 1.25rem", ...(danger ? { color: "#e06a6a" } : {}) }}
-        >
-          {busy ? "Working…" : submitLabel}
-        </button>
-        <button type="button" className="btn btn-cancel" onClick={onCancel} style={{ padding: "0.5rem 1.25rem" }}>
+        {danger ? (
+          <SecondaryButton type="submit" danger disabled={busy || totpCode.length !== 6 || !words.trim()}>
+            {busy ? "Working…" : submitLabel}
+          </SecondaryButton>
+        ) : (
+          <ShineButton type="submit" size="md" disabled={busy || totpCode.length !== 6 || !words.trim()}>
+            {busy ? "Working…" : submitLabel}
+          </ShineButton>
+        )}
+        <SecondaryButton type="button" onClick={onCancel}>
           Cancel
-        </button>
+        </SecondaryButton>
       </div>
     </form>
   );
@@ -256,55 +293,52 @@ export default function SettingsPage() {
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "12px" }}>
-        <h1 style={{ fontSize: "1.1rem", margin: 0, fontWeight: 700 }}>settings</h1>
-        <Link href="/mail" style={{ color: "#878787", fontSize: "13px" }}>back to inbox</Link>
+        <h1 style={{ fontSize: "1.1rem", margin: 0, fontWeight: 600, letterSpacing: "-0.02em" }}>Settings</h1>
+        <Link href="/mail" style={{ color: "var(--muted-foreground)", fontSize: "13px" }}>
+          Back to inbox
+        </Link>
       </div>
 
       <div className="panel" style={{ padding: "16px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "0.5rem" }}>
           <b style={{ fontSize: "14px" }}>Passkeys</b>
-          <span style={{ color: "#878787", fontSize: "12px" }}>
+          <span style={{ color: "var(--muted-foreground)", fontSize: "12px" }}>
             {passkeys ? `${passkeys.length} / ${max}` : ""}
           </span>
         </div>
-        <p style={{ color: "#878787", fontSize: "13px", margin: "0 0 1rem", lineHeight: 1.6 }}>
-          Your <b style={{ color: "#ddd" }}>original</b> passkey signs you in with one tap and is
+        <p style={{ color: "var(--muted-foreground)", fontSize: "13px", margin: "0 0 1rem", lineHeight: 1.6 }}>
+          Your <b style={{ color: "var(--foreground)" }}>original</b> passkey signs you in with one tap and is
           permanent. Passkeys you add here also ask for an authenticator code when signing in, and
           can be removed. Adding or removing a passkey always needs your recovery code +
           authenticator code.
         </p>
 
-        {notice && <div style={{ color: "#7bb97b", fontSize: "13px", marginBottom: "0.75rem" }}>{notice}</div>}
+        {notice && <AlertMessage tone="success">{notice}</AlertMessage>}
 
         {passkeys === null ? (
-          <div style={{ color: "#878787", fontSize: "13px" }}>Loading…</div>
+          <div style={{ color: "var(--muted-foreground)", fontSize: "13px" }}>Loading…</div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
             {passkeys.map((p, i) => (
-              <div key={p.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", borderRadius: 6, background: "#1a1a1a" }}>
+              <div key={p.id} style={rowStyle}>
                 <div>
                   <div style={{ fontSize: "13px", display: "flex", alignItems: "center", gap: "8px" }}>
+                    <MIcon name="passkey" size={14} />
                     {p.isOriginal ? "Original passkey" : p.nickname || `Passkey ${i + 1}`}
-                    {p.isOriginal && (
-                      <span style={{ fontSize: "11px", color: "#7bb97b", border: "1px solid #2c3a2c", borderRadius: 4, padding: "0 6px" }}>one-tap</span>
-                    )}
+                    {p.isOriginal && <Chip active>one-tap</Chip>}
                   </div>
-                  <div style={{ color: "#878787", fontSize: "11px", marginTop: 2 }}>
+                  <div style={{ color: "var(--muted-foreground)", fontSize: "11px", marginTop: 2 }}>
                     added {new Date(p.createdAt).toLocaleDateString()}
                     {p.lastUsedAt ? ` · last used ${new Date(p.lastUsedAt).toLocaleDateString()}` : " · not used yet"}
                   </div>
                 </div>
                 {/* The original passkey is permanent and has no remove button. */}
                 {p.isOriginal ? (
-                  <span style={{ color: "#5a5a5a", fontSize: "11px" }}>permanent</span>
+                  <span style={{ color: "var(--muted-foreground)", fontSize: "11px" }}>permanent</span>
                 ) : mode.kind === "remove" && mode.id === p.id ? null : (
-                  <button
-                    className="btn btn-cancel"
-                    onClick={() => resetForm({ kind: "remove", id: p.id })}
-                    style={{ padding: "0.35rem 0.9rem", fontSize: "12px" }}
-                  >
-                    remove
-                  </button>
+                  <SecondaryButton size="sm" danger variant="ghost" onClick={() => resetForm({ kind: "remove", id: p.id })}>
+                    Remove
+                  </SecondaryButton>
                 )}
               </div>
             ))}
@@ -312,8 +346,8 @@ export default function SettingsPage() {
         )}
 
         {mode.kind === "remove" && (
-          <div style={{ marginTop: "0.75rem", padding: "12px", borderRadius: 6, border: "1px solid #3a2c2c" }}>
-            <div style={{ fontSize: "13px", color: "#e06a6a" }}>Remove this passkey?</div>
+          <div style={{ marginTop: "0.75rem", padding: "12px", borderRadius: 8, border: "0.7px solid rgba(239,68,68,0.3)" }}>
+            <div style={{ fontSize: "13px", color: "#f87171" }}>Remove this passkey?</div>
             <GateForm
               words={words}
               setWords={setWords}
@@ -331,14 +365,15 @@ export default function SettingsPage() {
 
         {mode.kind === "add" && (
           <div style={{ marginTop: "0.75rem" }}>
-            <div style={{ display: "flex", gap: "8px", alignItems: "flex-start", padding: "9px 12px", borderRadius: 6, background: "rgba(123,185,123,0.08)", color: "#9ac79a", fontSize: "12px", lineHeight: 1.6 }}>
-              <span className="icon" style={{ fontSize: "16px", marginTop: "1px" }}>info</span>
-              <span>
-                Adding a passkey <b>won&apos;t reset your recovery code or your authenticator</b>
-                {" "}— both stay exactly as they are. You&apos;re only entering them here to prove
-                it&apos;s you.
-              </span>
-            </div>
+            <AlertMessage
+              tone="info"
+              icon={<MIcon name="info" size={16} style={{ flexShrink: 0, marginRight: 8, marginTop: 2 }} />}
+              style={{ fontSize: 12 }}
+            >
+              Adding a passkey <b>won&apos;t reset your recovery code or your authenticator</b>
+              {" "}— both stay exactly as they are. You&apos;re only entering them here to prove
+              it&apos;s you.
+            </AlertMessage>
             <GateForm
               words={words}
               setWords={setWords}
@@ -354,17 +389,13 @@ export default function SettingsPage() {
         )}
 
         {mode.kind === "view" && (
-          <div style={{ marginTop: "1rem" }}>
-            <button
-              className="btn btn-primary"
-              onClick={() => resetForm({ kind: "add" })}
-              disabled={atMax}
-              style={{ padding: "0.55rem 1.5rem" }}
-            >
+          <div style={{ marginTop: "1rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
+            <ShineButton size="md" onClick={() => resetForm({ kind: "add" })} disabled={atMax}>
+              <MIcon name="add" size={16} style={{ marginRight: 6 }} />
               Add a passkey
-            </button>
+            </ShineButton>
             {atMax && (
-              <span style={{ color: "#878787", fontSize: "12px", marginLeft: "0.75rem" }}>
+              <span style={{ color: "var(--muted-foreground)", fontSize: "12px" }}>
                 You&apos;ve reached the maximum of {max}. Remove one to add another.
               </span>
             )}
@@ -376,7 +407,7 @@ export default function SettingsPage() {
 
       <div className="panel" style={{ padding: "16px", marginTop: "12px" }}>
         <b style={{ fontSize: "14px" }}>Two-factor on sign-in</b>
-        <p style={{ color: "#878787", fontSize: "13px", margin: "0.5rem 0 1rem", lineHeight: 1.6 }}>
+        <p style={{ color: "var(--muted-foreground)", fontSize: "13px", margin: "0.5rem 0 1rem", lineHeight: 1.6 }}>
           A passkey already counts as two factors — the device plus your fingerprint, face or PIN
           — so by default your original passkey signs you in with one tap. Turn this on to also
           require a code from your authenticator app every single time. Passkeys you added later
@@ -384,60 +415,56 @@ export default function SettingsPage() {
         </p>
 
         {passkeys === null ? (
-          <div style={{ color: "#878787", fontSize: "13px" }}>Loading…</div>
+          <div style={{ color: "var(--muted-foreground)", fontSize: "13px" }}>Loading…</div>
         ) : (
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", borderRadius: 6, background: "#1a1a1a" }}>
+          <div style={rowStyle}>
             <div>
               <div style={{ fontSize: "13px", display: "flex", alignItems: "center", gap: "8px" }}>
                 Ask for a code on every sign-in
-                <span style={{ fontSize: "11px", color: requireTotp ? "#7bb97b" : "#878787", border: `1px solid ${requireTotp ? "#2c3a2c" : "#333"}`, borderRadius: 4, padding: "0 6px" }}>
-                  {requireTotp ? "on" : "off"}
-                </span>
+                <Chip active={requireTotp}>{requireTotp ? "on" : "off"}</Chip>
               </div>
-              <div style={{ color: "#878787", fontSize: "11px", marginTop: 2 }}>
+              <div style={{ color: "var(--muted-foreground)", fontSize: "11px", marginTop: 2 }}>
                 {requireTotp
                   ? "Your original passkey also asks for an authenticator code."
                   : "Your original passkey signs you in with one tap."}
               </div>
             </div>
             {mode.kind === "totp-on" || mode.kind === "totp-off" ? null : (
-              <button
-                className="btn btn-cancel"
-                onClick={() => resetForm({ kind: requireTotp ? "totp-off" : "totp-on" })}
-                style={{ padding: "0.35rem 0.9rem", fontSize: "12px" }}
-              >
-                {requireTotp ? "turn off" : "turn on"}
-              </button>
+              <SecondaryButton size="sm" onClick={() => resetForm({ kind: requireTotp ? "totp-off" : "totp-on" })}>
+                {requireTotp ? "Turn off" : "Turn on"}
+              </SecondaryButton>
             )}
           </div>
         )}
 
         {mode.kind === "totp-on" && (
           <form onSubmit={onToggleTotp} style={{ display: "flex", flexDirection: "column", gap: "0.75rem", marginTop: "0.75rem" }}>
-            <p style={{ color: "#878787", fontSize: "13px", margin: 0, lineHeight: 1.6 }}>
+            <p style={{ color: "var(--muted-foreground)", fontSize: "13px", margin: 0, lineHeight: 1.6 }}>
               Enter a code from your authenticator to confirm it works — otherwise turning this on
               could lock you out of every future sign-in.
             </p>
-            <input
-              className="inpt"
+            <TextInput
               inputMode="numeric"
               pattern="[0-9]{6}"
               maxLength={6}
-              placeholder="authenticator code"
+              size="md"
+              placeholder="Authenticator code"
               autoComplete="one-time-code"
               value={totpCode}
               onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ""))}
               required
+              fullWidth
+              leading={<MIcon name="pin" size={16} />}
               style={{ fontFamily: "ui-monospace, monospace", letterSpacing: "0.2em" }}
             />
-            {error && <div style={{ color: "#e06a6a", fontSize: "13px" }}>{error}</div>}
+            {error && <AlertMessage tone="error" style={{ marginBottom: 0 }}>{error}</AlertMessage>}
             <div style={{ display: "flex", gap: "0.5rem" }}>
-              <button className="btn btn-primary" type="submit" disabled={busy || totpCode.length !== 6} style={{ padding: "0.5rem 1.25rem" }}>
+              <ShineButton type="submit" size="md" disabled={busy || totpCode.length !== 6}>
                 {busy ? "Working…" : "Turn on"}
-              </button>
-              <button type="button" className="btn btn-cancel" onClick={() => resetForm({ kind: "view" })} style={{ padding: "0.5rem 1.25rem" }}>
+              </ShineButton>
+              <SecondaryButton type="button" onClick={() => resetForm({ kind: "view" })}>
                 Cancel
-              </button>
+              </SecondaryButton>
             </div>
           </form>
         )}

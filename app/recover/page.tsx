@@ -19,6 +19,12 @@ import {
   storeMailKey,
   loadMailKey,
 } from "@/lib/client/crypto";
+import { ShineButton } from "@/components/ui/shine-button";
+import { SecondaryLink } from "@/components/ui/link-button";
+import { TextInput } from "@/components/ui/text-input";
+import { AlertMessage } from "@/components/ui/alert-message";
+import { MIcon } from "@/components/ui/material-icon";
+import { AuthColumn, AuthPanel } from "@/components/auth-panel";
 import PasskeyHelp from "../ui/PasskeyHelp";
 import RecoveryWordsInput from "../ui/RecoveryWordsInput";
 
@@ -101,88 +107,104 @@ export default function RecoverPage() {
     }
   }
 
-  return (
-    <main style={{ minHeight: "100dvh", display: "grid", placeItems: "center", padding: "1.5rem" }}>
-      <div style={{ width: "100%", maxWidth: 500 }}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="https://r2.hypastack.com/cdn/fepvmb5y0u31/hypamail.webp"
-          alt="hypamail"
-          style={{ height: 80, width: "auto", display: "block", marginBottom: "1.5rem" }}
-        />
+  const footer = (
+    <>
+      Remembered a device?{" "}
+      <Link href="/login" className="text-[#f7f8f8] font-semibold hover:underline">
+        Back to sign in
+      </Link>
+    </>
+  );
 
-        {recovered ? (
-          <>
-            <h1 style={{ fontSize: "1.75rem", fontWeight: 600, margin: "0 0 0.5rem" }}>You&apos;re back in</h1>
-            <p style={{ color: "#878787", fontSize: "13px", margin: "0 0 1.5rem", lineHeight: 1.6 }}>
-              Add a passkey on this device so next time is one tap. Enter a fresh code from your
-              authenticator to confirm (this passkey will be a secondary one, so signing in with
-              it will also ask for a code).
-            </p>
-            <form onSubmit={onAddPasskey} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-              <input
-                className="inpt"
+  return (
+    <div className="flex min-h-screen bg-[#151515]">
+      {recovered ? (
+        <AuthColumn
+          title="You're back in"
+          subtitle="Add a passkey on this device so next time is one tap."
+          footer={footer}
+        >
+          <p className="text-[13px] text-[#898e97] leading-[1.6] m-0 mb-5">
+            Enter a fresh code from your authenticator to confirm (this passkey will be a
+            secondary one, so signing in with it will also ask for a code).
+          </p>
+          <form onSubmit={onAddPasskey} className="space-y-4">
+            <TextInput
+              inputMode="numeric"
+              pattern="[0-9]{6}"
+              maxLength={6}
+              placeholder="Authenticator code"
+              autoComplete="one-time-code"
+              value={addTotp}
+              onChange={(e) => setAddTotp(e.target.value.replace(/\D/g, ""))}
+              required
+              fullWidth
+              leading={<MIcon name="pin" size={16} />}
+              style={{ fontFamily: "ui-monospace, monospace", letterSpacing: "0.2em" }}
+            />
+            <ShineButton type="submit" disabled={busy || addTotp.length !== 6} fullWidth>
+              {busy ? "Waiting for your device…" : "Add a passkey on this device"}
+            </ShineButton>
+          </form>
+          <SecondaryLink href="/mail" fullWidth style={{ marginTop: "0.75rem" }}>
+            Skip — go to inbox
+          </SecondaryLink>
+          {error && <AlertMessage tone="error" style={{ marginTop: 12, marginBottom: 0 }}>{error}</AlertMessage>}
+          <PasskeyHelp />
+        </AuthColumn>
+      ) : (
+        <AuthColumn
+          title="Account recovery"
+          subtitle="Lost your device? Sign in with your username, your 12 recovery words, and a code from your authenticator app."
+          footer={footer}
+        >
+          <form onSubmit={onRecover} className="space-y-4">
+            <div>
+              <label className="block text-[13px] font-medium text-[#f7f8f8] mb-2 pl-1" htmlFor="username">
+                Username
+              </label>
+              <TextInput
+                id="username"
+                name="username"
+                placeholder="you"
+                autoComplete="username"
+                autoCapitalize="none"
+                required
+                fullWidth
+                leading={<MIcon name="person" size={16} />}
+              />
+            </div>
+            <div>
+              <label className="block text-[13px] font-medium text-[#f7f8f8] mb-2 pl-1">
+                Recovery code (12 words)
+              </label>
+              <RecoveryWordsInput value={words} onChange={setWords} disabled={busy} />
+            </div>
+            <div>
+              <label className="block text-[13px] font-medium text-[#f7f8f8] mb-2 pl-1" htmlFor="totp">
+                Authenticator code
+              </label>
+              <TextInput
+                id="totp"
+                name="totp"
                 inputMode="numeric"
                 pattern="[0-9]{6}"
                 maxLength={6}
-                placeholder="authenticator code"
+                placeholder="000000"
                 autoComplete="one-time-code"
-                value={addTotp}
-                onChange={(e) => setAddTotp(e.target.value.replace(/\D/g, ""))}
                 required
-                style={{ fontFamily: "ui-monospace, monospace", letterSpacing: "0.2em" }}
+                fullWidth
+                style={{ fontFamily: "ui-monospace, monospace", letterSpacing: "0.3em", textAlign: "center" }}
               />
-              <button className="btn btn-primary" type="submit" disabled={busy || addTotp.length !== 6} style={{ width: "100%", padding: "0.55rem" }}>
-                {busy ? "Waiting for your device…" : "Add a passkey on this device"}
-              </button>
-            </form>
-            <Link className="btn btn-cancel" href="/mail" style={{ display: "block", width: "100%", textAlign: "center", padding: "0.55rem", marginTop: "0.75rem" }}>
-              Skip — go to inbox
-            </Link>
-            {error && <div style={{ color: "#e06a6a", fontSize: "13px", marginTop: "0.75rem" }}>{error}</div>}
-            <PasskeyHelp />
-          </>
-        ) : (
-          <>
-            <h1 style={{ fontSize: "1.75rem", fontWeight: 600, margin: "0 0 0.5rem" }}>Account recovery</h1>
-            <p style={{ color: "#878787", fontSize: "13px", margin: "0 0 1.75rem", lineHeight: 1.6 }}>
-              Lost your device? Sign in with your username, your 12 recovery words, and a
-              code from your authenticator app.
-            </p>
-            <form onSubmit={onRecover} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-              <div>
-                <label className="field-label">Username</label>
-                <input className="inpt" name="username" placeholder="Username" autoComplete="username" autoCapitalize="none" required />
-              </div>
-              <div>
-                <label className="field-label">Recovery code (12 words)</label>
-                <RecoveryWordsInput value={words} onChange={setWords} disabled={busy} />
-              </div>
-              <div>
-                <label className="field-label">Authenticator code</label>
-                <input
-                  className="inpt"
-                  name="totp"
-                  inputMode="numeric"
-                  pattern="[0-9]{6}"
-                  maxLength={6}
-                  placeholder="000000"
-                  autoComplete="one-time-code"
-                  required
-                  style={{ fontFamily: "ui-monospace, monospace", letterSpacing: "0.3em" }}
-                />
-              </div>
-              {error && <div style={{ color: "#e06a6a", fontSize: "13px" }}>{error}</div>}
-              <button className="btn btn-primary" type="submit" disabled={busy} style={{ width: "100%", padding: "0.55rem" }}>
-                {busy ? "Checking…" : "Recover account"}
-              </button>
-            </form>
-            <p style={{ fontSize: "13px", marginTop: "1.25rem" }}>
-              <Link href="/login" style={{ fontWeight: 600 }}>Back to sign in</Link>
-            </p>
-          </>
-        )}
-      </div>
-    </main>
+            </div>
+            {error && <AlertMessage tone="error" style={{ marginBottom: 0 }}>{error}</AlertMessage>}
+            <ShineButton type="submit" disabled={busy} fullWidth>
+              {busy ? "Checking…" : "Recover account"}
+            </ShineButton>
+          </form>
+        </AuthColumn>
+      )}
+      <AuthPanel />
+    </div>
   );
 }

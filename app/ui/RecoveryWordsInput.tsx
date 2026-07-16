@@ -11,6 +11,16 @@ import { isRecoveryWord } from "@/lib/client/crypto";
 
 const COUNT = 12;
 
+// Cells match the TextInput palette so the grid reads as one recessed field.
+const CELL = {
+  bg: "rgba(0,0,0,0.22)",
+  border: "rgba(255,255,255,0.1)",
+  badBorder: "rgba(239,68,68,0.5)",
+  number: "#898e97",
+  badNumber: "#f87171",
+  text: "#f7f8f8",
+};
+
 // BIP39 words are plain lowercase a-z.
 const clean = (s: string) => s.toLowerCase().replace(/[^a-z]/g, "");
 
@@ -112,9 +122,10 @@ export default function RecoveryWordsInput({
             display: "flex",
             alignItems: "center",
             gap: "6px",
-            background: "#1a1a1a",
-            border: `1px solid ${isBad(i) ? "#e06a6a" : "#2a2a2a"}`,
-            borderRadius: 6,
+            background: CELL.bg,
+            border: `0.7px solid ${isBad(i) ? CELL.badBorder : CELL.border}`,
+            borderRadius: 8,
+            boxShadow: "inset 0 1px 0 0 rgba(255,255,255,0.16), inset 0 -1px 0 0 rgba(255,255,255,0.08)",
             padding: "6px 8px",
             // Grid items default to min-width:auto and won't shrink below the
             // input's intrinsic width, which overflows the page on narrow
@@ -124,7 +135,7 @@ export default function RecoveryWordsInput({
         >
           <span
             style={{
-              color: isBad(i) ? "#e06a6a" : "#6e6e6e",
+              color: isBad(i) ? CELL.badNumber : CELL.number,
               fontSize: "11px",
               minWidth: "1.6em",
               textAlign: "right",
@@ -158,7 +169,7 @@ export default function RecoveryWordsInput({
               background: "transparent",
               border: "none",
               outline: "none",
-              color: "#eee",
+              color: CELL.text,
               fontFamily: "ui-monospace, monospace",
               fontSize: "13px",
               padding: 0,

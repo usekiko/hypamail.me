@@ -15,6 +15,10 @@ import {
   recoveryWordsError,
   storeMailKey,
 } from "@/lib/client/crypto";
+import { ShineButton } from "@/components/ui/shine-button";
+import { SecondaryButton } from "@/components/ui/secondary-button";
+import { AlertMessage } from "@/components/ui/alert-message";
+import { MIcon } from "@/components/ui/material-icon";
 import RecoveryWordsInput from "./RecoveryWordsInput";
 
 export default function Unlock({ onUnlocked }: { onUnlocked: (key: string) => void }) {
@@ -97,28 +101,28 @@ export default function Unlock({ onUnlocked }: { onUnlocked: (key: string) => vo
   return (
     <div className="panel" style={{ padding: "16px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "0.75rem" }}>
-        <span className="icon" style={{ fontSize: "18px" }}>lock</span>
+        <MIcon name="lock" size={16} />
         <b>Mailbox locked</b>
       </div>
-      <p style={{ color: "#878787", fontSize: "13px", margin: "0 0 1rem", lineHeight: 1.6 }}>
+      <p style={{ color: "var(--muted-foreground)", fontSize: "13px", margin: "0 0 1rem", lineHeight: 1.6 }}>
         Your mail is end-to-end encrypted and this tab doesn&apos;t hold the key yet.
         Unlock it with your passkey.
       </p>
-      <button className="btn btn-primary" onClick={viaPasskey} disabled={busy} style={{ width: "100%", padding: "0.55rem", marginBottom: "1rem" }}>
+      <ShineButton onClick={viaPasskey} disabled={busy} fullWidth style={{ marginBottom: "1rem" }}>
         {busy ? "Waiting…" : "Unlock with passkey"}
-      </button>
+      </ShineButton>
       <details>
-        <summary style={{ color: "#878787", fontSize: "13px", cursor: "pointer" }}>
+        <summary style={{ color: "var(--muted-foreground)", fontSize: "13px", cursor: "pointer" }}>
           Use recovery words instead
         </summary>
         <form onSubmit={viaWords} style={{ marginTop: "0.75rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
           <RecoveryWordsInput value={words} onChange={setWords} disabled={busy} />
-          <button className="btn btn-cancel" type="submit" disabled={busy || !words.trim()} style={{ padding: "0.5rem" }}>
+          <SecondaryButton type="submit" disabled={busy || !words.trim()} fullWidth>
             Unlock
-          </button>
+          </SecondaryButton>
         </form>
       </details>
-      {error && <div style={{ color: "#e06a6a", fontSize: "13px", marginTop: "0.75rem" }}>{error}</div>}
+      {error && <AlertMessage tone="error" style={{ marginTop: "0.75rem", marginBottom: 0 }}>{error}</AlertMessage>}
     </div>
   );
 }

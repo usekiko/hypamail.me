@@ -15,6 +15,13 @@ import QRCode from "qrcode";
 import Turnstile from "../ui/Turnstile";
 import PasskeyHelp from "../ui/PasskeyHelp";
 import FirefoxNote from "../ui/FirefoxNote";
+import { ShineButton } from "@/components/ui/shine-button";
+import { SecondaryButton } from "@/components/ui/secondary-button";
+import { TextInput } from "@/components/ui/text-input";
+import { AlertMessage } from "@/components/ui/alert-message";
+import { MIcon } from "@/components/ui/material-icon";
+import { AuthColumn, AuthPanel } from "@/components/auth-panel";
+import { inviteRequired, INVITE_FREE_LABEL } from "@/constants/invite";
 import {
   signupBegin,
   signupComplete,
@@ -36,26 +43,25 @@ import {
 const DOMAIN = process.env.NEXT_PUBLIC_MAIL_DOMAIN || "hypamail.me";
 const SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "";
 
-const Logo = () => (
-  // eslint-disable-next-line @next/next/no-img-element
-  <img
-    src="https://r2.hypastack.com/cdn/fepvmb5y0u31/hypamail.webp"
-    alt="hypamail"
-    style={{ height: 80, width: "auto", display: "block", marginBottom: "1.5rem" }}
-  />
-);
-
-const Shell = ({ children }: { children: React.ReactNode }) => (
-  <main style={{ minHeight: "100dvh", display: "grid", placeItems: "center", padding: "1.5rem" }}>
-    <div style={{ width: "100%", maxWidth: 500 }}>
-      <Logo />
+// Every wizard step shares the split auth shell from main's login/signup pages.
+const Shell = ({
+  title,
+  subtitle,
+  footer,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  footer: React.ReactNode;
+  children: React.ReactNode;
+}) => (
+  <div className="flex min-h-screen bg-[#151515]">
+    <AuthColumn title={title} subtitle={subtitle} footer={footer}>
       {children}
-    </div>
-  </main>
+    </AuthColumn>
+    <AuthPanel />
+  </div>
 );
-
-const Err = ({ msg }: { msg: string | null }) =>
-  msg ? <div style={{ color: "#e06a6a", fontSize: "13px", marginTop: "0.75rem" }}>{msg}</div> : null;
 
 type Step = "form" | "passkey" | "words" | "totp";
 
@@ -83,6 +89,7 @@ export default function SignupPage() {
   const [downloaded, setDownloaded] = useState(false);
   const [totpCode, setTotpCode] = useState("");
   const qrRef = useRef<HTMLCanvasElement>(null);
+  const needsInvite = inviteRequired();
 
   // Save the recovery code as a plain-text file. This is the user's only copy —
   // the server never sees these words, so there is nothing to re-send later.
@@ -226,18 +233,31 @@ export default function SignupPage() {
     }
   }
 
+  const signInFooter = (
+    <>
+      Already have an account?{" "}
+      <Link href="/login" className="text-[#f7f8f8] font-semibold hover:underline">
+        Sign in
+      </Link>
+    </>
+  );
+
   if (step === "passkey") {
     return (
-      <Shell>
-        <h1 style={{ fontSize: "1.75rem", fontWeight: 600, margin: "0 0 0.5rem" }}>Create your passkey</h1>
-        <p style={{ color: "#878787", fontSize: "13px", margin: "0 0 1.75rem", lineHeight: 1.6 }}>
-          {wiz?.begin.email} has no password. You sign in with a passkey — your
-          fingerprint, face, or device PIN. Your browser will ask you to create one now.
+      <Shell
+        title="Create your passkey"
+        subtitle={`${wiz?.begin.email} has no password.`}
+        footer={signInFooter}
+      >
+        <p className="text-[13px] text-[#898e97] leading-[1.6] m-0 mb-6">
+          You sign in with a passkey — your fingerprint, face, or device PIN. Your browser
+          will ask you to create one now.
         </p>
-        <button className="btn btn-primary" onClick={onCreatePasskey} disabled={busy} style={{ width: "100%", padding: "0.55rem" }}>
+        <ShineButton onClick={onCreatePasskey} disabled={busy} fullWidth>
+          <MIcon name="passkey" size={18} style={{ marginRight: 8 }} />
           {busy ? "Waiting for your device…" : "Create passkey"}
-        </button>
-        <Err msg={error} />
+        </ShineButton>
+        {error && <AlertMessage tone="error" style={{ marginTop: 12, marginBottom: 0 }}>{error}</AlertMessage>}
         <FirefoxNote />
         <PasskeyHelp />
       </Shell>
@@ -246,48 +266,50 @@ export default function SignupPage() {
 
   if (step === "words" && wiz?.words) {
     return (
-      <Shell>
-        <h1 style={{ fontSize: "1.75rem", fontWeight: 600, margin: "0 0 0.5rem" }}>Your recovery code</h1>
-        <p style={{ color: "#878787", fontSize: "13px", margin: "0 0 1.25rem", lineHeight: 1.6 }}>
+      <Shell
+        title="Your recovery code"
+        subtitle="It will not be shown again."
+        footer={signInFooter}
+      >
+        <p className="text-[13px] text-[#898e97] leading-[1.6] m-0 mb-5">
           Write these 12 words down and keep them safe. They are the{" "}
-          <b style={{ color: "#ddd" }}>only</b>{" "}
+          <b className="text-[#f7f8f8]">only</b>{" "}
           way back into your account if you lose your devices — and the only backup key to your
-          mail. We can&apos;t reset or recover them. They will not be shown again.
+          mail. We can&apos;t reset or recover them.
         </p>
-        <div className="panel" style={{ padding: "14px", marginBottom: "1rem", userSelect: "all" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "10px 16px", fontFamily: "ui-monospace, monospace", fontSize: "14px" }}>
+        <div className="panel mb-4 select-all" style={{ padding: 14 }}>
+          <div
+            className="grid grid-cols-3 font-mono text-[14px]"
+            style={{ gap: "10px 16px", fontFamily: "ui-monospace, monospace" }}
+          >
             {wiz.words.split(" ").map((w, i) => (
-              <span key={i} style={{ display: "flex", gap: "6px" }}>
-                <span style={{ color: "#6e6e6e", minWidth: "1.6em", textAlign: "right" }}>{i + 1}.</span>
-                <span>{w}</span>
+              <span key={i} className="flex gap-1.5" style={{ minWidth: 0 }}>
+                <span className="text-[#898e97] text-right" style={{ minWidth: "1.6em" }}>{i + 1}.</span>
+                <span className="text-[#f7f8f8]">{w}</span>
               </span>
             ))}
           </div>
         </div>
 
-        <button
-          className="btn btn-cancel"
-          onClick={downloadRecoveryCode}
-          style={{ width: "100%", padding: "0.55rem", marginBottom: "1rem", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "6px" }}
-        >
-          <span className="icon" style={{ fontSize: "18px" }}>download</span>
+        <SecondaryButton onClick={downloadRecoveryCode} fullWidth style={{ marginBottom: "1rem" }}>
+          <MIcon name="download" size={16} style={{ marginRight: 6 }} />
           {downloaded ? "Downloaded — download again" : "Download recovery code"}
-        </button>
+        </SecondaryButton>
 
-        <label style={{ display: "flex", gap: "8px", alignItems: "flex-start", fontSize: "13px", marginBottom: "1.25rem", cursor: "pointer" }}>
-          <input type="checkbox" checked={wordsSaved} onChange={(e) => setWordsSaved(e.target.checked)} style={{ marginTop: 2 }} />
+        <label className="flex items-start gap-2 text-[13px] text-[#f7f8f8] mb-5 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={wordsSaved}
+            onChange={(e) => setWordsSaved(e.target.checked)}
+            className="mt-0.5"
+          />
           <span>I saved my recovery code. I understand it cannot be recovered for me.</span>
         </label>
-        <button
-          className="btn btn-primary"
-          disabled={!wordsSaved || !downloaded}
-          onClick={() => setStep("totp")}
-          style={{ width: "100%", padding: "0.55rem" }}
-        >
+        <ShineButton disabled={!wordsSaved || !downloaded} onClick={() => setStep("totp")} fullWidth>
           Continue
-        </button>
+        </ShineButton>
         {!downloaded && (
-          <p style={{ color: "#878787", fontSize: "12px", marginTop: "0.6rem", textAlign: "center" }}>
+          <p className="text-[12px] text-[#898e97] mt-2.5 text-center">
             Download your recovery code to continue.
           </p>
         )}
@@ -297,27 +319,30 @@ export default function SignupPage() {
 
   if (step === "totp" && wiz?.begin.totpSecret) {
     return (
-      <Shell>
-        <h1 style={{ fontSize: "1.75rem", fontWeight: 600, margin: "0 0 0.5rem" }}>Set up 2FA</h1>
-        <p style={{ color: "#878787", fontSize: "13px", margin: "0 0 1.25rem", lineHeight: 1.6 }}>
-          Scan this with an authenticator app (Aegis, Ente Auth, Google Authenticator…).
+      <Shell
+        title="Set up 2FA"
+        subtitle="Scan this with an authenticator app (Aegis, Ente Auth, Google Authenticator…)."
+        footer={signInFooter}
+      >
+        <p className="text-[13px] text-[#898e97] leading-[1.6] m-0 mb-5">
           It protects account recovery: recovery needs your 12 words{" "}
-          <b style={{ color: "#ddd" }}>and</b>{" "}
+          <b className="text-[#f7f8f8]">and</b>{" "}
           a code from this app. Use an authenticator with backups — losing both your passkeys and
           this app means the account is gone for good.
         </p>
-        <div style={{ background: "#fff", borderRadius: 8, padding: 10, width: "fit-content", margin: "0 auto 1rem" }}>
-          <canvas ref={qrRef} style={{ display: "block" }} />
+        <div className="bg-white rounded-lg p-2.5 w-fit mx-auto mb-4">
+          <canvas ref={qrRef} className="block" />
         </div>
-        <p style={{ color: "#878787", fontSize: "12px", margin: "0 0 1.25rem", textAlign: "center" }}>
+        <p className="text-[12px] text-[#898e97] m-0 mb-5 text-center">
           Can&apos;t scan? Enter manually:{" "}
-          <code style={{ userSelect: "all", color: "#bbb" }}>{wiz.begin.totpSecret}</code>
+          <code className="select-all text-[#b9bec6]">{wiz.begin.totpSecret}</code>
         </p>
-        <form onSubmit={onComplete} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+        <form onSubmit={onComplete} className="space-y-4">
           <div>
-            <label className="field-label">6-digit code from the app</label>
-            <input
-              className="inpt"
+            <label className="block text-[13px] font-medium text-[#f7f8f8] mb-2 pl-1">
+              6-digit code from the app
+            </label>
+            <TextInput
               inputMode="numeric"
               pattern="[0-9]{6}"
               maxLength={6}
@@ -325,51 +350,92 @@ export default function SignupPage() {
               value={totpCode}
               onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ""))}
               required
+              fullWidth
               style={{ fontFamily: "ui-monospace, monospace", letterSpacing: "0.3em", textAlign: "center" }}
             />
           </div>
-          <button className="btn btn-primary" type="submit" disabled={busy || totpCode.length !== 6} style={{ width: "100%", padding: "0.55rem" }}>
+          <ShineButton type="submit" disabled={busy || totpCode.length !== 6} fullWidth>
             {busy ? "Creating account…" : "Verify & finish"}
-          </button>
-          <Err msg={error} />
+          </ShineButton>
+          {error && <AlertMessage tone="error" style={{ marginBottom: 0 }}>{error}</AlertMessage>}
         </form>
       </Shell>
     );
   }
 
   return (
-    <Shell>
-      <h1 style={{ fontSize: "1.75rem", fontWeight: 600, margin: "0 0 0.5rem" }}>Register</h1>
-      <p style={{ color: "#878787", fontSize: "13px", margin: "0 0 1.75rem" }}>
-        invite-only — no password, you&apos;ll sign in with a passkey
-      </p>
-      <form onSubmit={onBegin} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+    <Shell
+      title="Create account"
+      subtitle="No password — you'll sign in with a passkey."
+      footer={signInFooter}
+    >
+      {!needsInvite && (
+        <AlertMessage
+          tone="info"
+          icon={<MIcon name="celebration" size={16} style={{ flexShrink: 0, marginRight: 8, marginTop: 2 }} />}
+          className="mb-5"
+        >
+          Invites are open until {INVITE_FREE_LABEL}. You don&apos;t need a code, just pick a
+          username.
+        </AlertMessage>
+      )}
+
+      <form onSubmit={onBegin} className="space-y-4">
         <div>
-          <label className="field-label">Username</label>
-          <div style={{ display: "flex" }}>
-            <input className="inpt" name="username" placeholder="Username" autoComplete="off" autoCapitalize="none" required style={{ flex: 1 }} />
-            <span style={{ display: "flex", alignItems: "center", padding: "0 12px", background: "#1f1f1f", color: "#878787", fontSize: "14px", whiteSpace: "nowrap" }}>
-              @{DOMAIN}
-            </span>
-          </div>
+          <label className="block text-[13px] font-medium text-[#f7f8f8] mb-2 pl-1" htmlFor="username">
+            Username
+          </label>
+          <TextInput
+            id="username"
+            name="username"
+            disabled={busy}
+            placeholder="you"
+            autoComplete="off"
+            autoCapitalize="off"
+            autoCorrect="off"
+            spellCheck={false}
+            data-lpignore="true"
+            data-1p-ignore="true"
+            required
+            fullWidth
+            trailing={<span className="text-[13px] whitespace-nowrap">@{DOMAIN}</span>}
+          />
         </div>
         <div>
-          <label className="field-label">Invite code</label>
-          <input className="inpt" name="invite" placeholder="Invite code" autoComplete="off" required />
+          <label
+            className={`block text-[13px] font-medium mb-2 pl-1 ${needsInvite ? "text-[#f7f8f8]" : "text-[#898e97]"}`}
+            htmlFor="invite"
+          >
+            Invite code{!needsInvite && " (not needed right now)"}
+          </label>
+          <TextInput
+            id="invite"
+            name="invite"
+            disabled={busy || !needsInvite}
+            placeholder={needsInvite ? "Invite code" : "Not needed until " + INVITE_FREE_LABEL}
+            autoComplete="off"
+            autoCapitalize="off"
+            autoCorrect="off"
+            spellCheck={false}
+            data-lpignore="true"
+            data-1p-ignore="true"
+            required={needsInvite}
+            fullWidth
+            leading={<MIcon name="confirmation_number" size={16} />}
+          />
         </div>
+
         {SITE_KEY ? (
           <Turnstile siteKey={SITE_KEY} />
         ) : (
-          <div style={{ color: "#878787", fontSize: "12px" }}>(Turnstile not configured)</div>
+          <p className="text-[12px] text-[#898e97] pl-1">(Turnstile not configured)</p>
         )}
-        {error && <div style={{ color: "#e06a6a", fontSize: "13px" }}>{error}</div>}
-        <button className="btn btn-cancel" type="submit" disabled={busy} style={{ width: "100%", padding: "0.55rem" }}>
+        {error && <AlertMessage tone="error" style={{ marginBottom: 0 }}>{error}</AlertMessage>}
+
+        <ShineButton type="submit" disabled={busy} fullWidth>
           {busy ? "Checking…" : "Continue"}
-        </button>
+        </ShineButton>
       </form>
-      <p style={{ fontSize: "13px", marginTop: "1.25rem" }}>
-        <Link href="/login" style={{ fontWeight: 600 }}>Already have an account?</Link>
-      </p>
     </Shell>
   );
 }

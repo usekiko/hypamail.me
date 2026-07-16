@@ -18,11 +18,26 @@ import {
   recoveryWordsError,
   storeMailKey,
 } from "@/lib/client/crypto";
+import { ShineButton } from "@/components/ui/shine-button";
+import { TextInput } from "@/components/ui/text-input";
+import { AlertMessage } from "@/components/ui/alert-message";
+import { MIcon } from "@/components/ui/material-icon";
+import { AuthColumn, AuthPanel } from "@/components/auth-panel";
+import { legacyLoginAvailable } from "@/constants/legacy";
 import PasskeyHelp from "../ui/PasskeyHelp";
 import FirefoxNote from "../ui/FirefoxNote";
 import RecoveryWordsInput from "../ui/RecoveryWordsInput";
 
 type Phase = "idle" | "totp" | "words";
+
+const TITLES: Record<Phase, { title: string; subtitle: string }> = {
+  idle: {
+    title: "Sign in",
+    subtitle: "No passwords here — your passkey signs you in and decrypts your mail.",
+  },
+  totp: { title: "One more step", subtitle: "Enter the code from your authenticator app." },
+  words: { title: "Unlock your mail", subtitle: "One-time step for this browser." },
+};
 
 export default function LoginPage() {
   const router = useRouter();
@@ -166,28 +181,43 @@ export default function LoginPage() {
   }
 
   return (
-    <main style={{ minHeight: "100dvh", display: "grid", placeItems: "center", padding: "1.5rem" }}>
-      <div style={{ width: "100%", maxWidth: 500 }}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="https://r2.hypastack.com/cdn/fepvmb5y0u31/hypamail.webp"
-          alt="hypamail"
-          style={{ height: 80, width: "auto", display: "block", marginBottom: "1.5rem" }}
-        />
-        <h1 style={{ fontSize: "1.75rem", fontWeight: 600, margin: "0 0 0.5rem" }}>Sign in</h1>
-        <p style={{ color: "#878787", fontSize: "13px", margin: "0 0 1.75rem" }}>
-          no passwords here — your passkey signs you in and decrypts your mail
-        </p>
-
+    <div className="flex min-h-screen bg-[#151515]">
+      <AuthColumn
+        title={TITLES[phase].title}
+        subtitle={TITLES[phase].subtitle}
+        footer={
+          <>
+            <span className="block">
+              Lost your device?{" "}
+              <Link href="/recover" className="text-[#f7f8f8] font-semibold hover:underline">
+                Recover your account
+              </Link>
+            </span>
+            <span className="block mt-1">
+              No account?{" "}
+              <Link href="/signup" className="text-[#f7f8f8] font-semibold hover:underline">
+                Create one
+              </Link>
+            </span>
+            {legacyLoginAvailable() && (
+              <span className="block mt-1">
+                Signed up back when we had passwords?{" "}
+                <Link href="/login/legacy" className="text-[#f7f8f8] font-semibold hover:underline">
+                  Move to passkeys
+                </Link>
+              </span>
+            )}
+          </>
+        }
+      >
         {phase === "totp" && (
-          <form onSubmit={onTotp} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-            <p style={{ color: "#878787", fontSize: "13px", margin: 0, lineHeight: 1.6 }}>
+          <form onSubmit={onTotp} className="space-y-4">
+            <p className="text-[13px] text-[#898e97] leading-[1.6] m-0">
               {totpReason === "always-on"
                 ? "You've asked for a code on every sign-in. Enter the one from your authenticator app."
                 : "This passkey was added after signup, so it also needs a code from your authenticator app."}
             </p>
-            <input
-              className="inpt"
+            <TextInput
               inputMode="numeric"
               pattern="[0-9]{6}"
               maxLength={6}
@@ -196,61 +226,65 @@ export default function LoginPage() {
               value={totpCode}
               onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ""))}
               required
+              fullWidth
               style={{ fontFamily: "ui-monospace, monospace", letterSpacing: "0.3em", textAlign: "center" }}
             />
-            {error && <div style={{ color: "#e06a6a", fontSize: "13px" }}>{error}</div>}
-            <button className="btn btn-primary" type="submit" disabled={busy || totpCode.length !== 6} style={{ width: "100%", padding: "0.55rem" }}>
+            {error && <AlertMessage tone="error" style={{ marginBottom: 0 }}>{error}</AlertMessage>}
+            <ShineButton type="submit" disabled={busy || totpCode.length !== 6} fullWidth>
               {busy ? "Checking…" : "Verify & sign in"}
-            </button>
+            </ShineButton>
           </form>
         )}
 
         {phase === "words" && (
-          <form onSubmit={onWords} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-            <p style={{ color: "#878787", fontSize: "13px", margin: 0, lineHeight: 1.6 }}>
+          <form onSubmit={onWords} className="space-y-4">
+            <p className="text-[13px] text-[#898e97] leading-[1.6] m-0">
               You&apos;re signed in, but this browser couldn&apos;t unlock your encrypted mail
               with the passkey alone. Enter your 12 recovery words once to unlock it here.
             </p>
             <RecoveryWordsInput value={words} onChange={setWords} disabled={busy} />
-            {error && <div style={{ color: "#e06a6a", fontSize: "13px" }}>{error}</div>}
-            <button className="btn btn-primary" type="submit" disabled={busy} style={{ width: "100%", padding: "0.55rem" }}>
+            {error && <AlertMessage tone="error" style={{ marginBottom: 0 }}>{error}</AlertMessage>}
+            <ShineButton type="submit" disabled={busy} fullWidth>
               {busy ? "Unlocking…" : "Unlock mail"}
-            </button>
+            </ShineButton>
           </form>
         )}
 
         {phase === "idle" && (
           <>
-            <button className="btn btn-primary" onClick={onPasskey} disabled={busy} style={{ width: "100%", padding: "0.55rem" }}>
+            <ShineButton onClick={onPasskey} disabled={busy} fullWidth>
+              <MIcon name="passkey" size={18} style={{ marginRight: 8 }} />
               {busy ? "Waiting for your device…" : "Sign in with passkey"}
-            </button>
-            {error && <div style={{ color: "#e06a6a", fontSize: "13px", marginTop: "0.75rem" }}>{error}</div>}
+            </ShineButton>
+            {error && <AlertMessage tone="error" style={{ marginTop: 12, marginBottom: 0 }}>{error}</AlertMessage>}
             <FirefoxNote />
 
             {showDevice ? (
-              <form onSubmit={onDevice} style={{ display: "flex", flexDirection: "column", gap: "0.75rem", marginTop: "1rem" }}>
-                <p style={{ color: "#878787", fontSize: "13px", margin: 0, lineHeight: 1.6 }}>
+              <form onSubmit={onDevice} className="mt-4 space-y-3">
+                <p className="text-[13px] text-[#898e97] leading-[1.6] m-0">
                   Enter your username and we&apos;ll offer your phone (via QR code) or your
                   security key. Your browser can&apos;t find a passkey that lives on another
                   device on its own.
                 </p>
-                <input
-                  className="inpt"
+                <TextInput
                   placeholder="Username"
                   value={deviceUser}
                   onChange={(e) => setDeviceUser(e.target.value.trim().toLowerCase())}
                   autoComplete="username webauthn"
                   autoCapitalize="none"
                   required
+                  fullWidth
+                  leading={<MIcon name="person" size={16} />}
                 />
-                <button className="btn btn-primary" type="submit" disabled={busy || !deviceUser} style={{ width: "100%", padding: "0.55rem" }}>
+                <ShineButton type="submit" disabled={busy || !deviceUser} fullWidth>
                   {busy ? "Waiting for your device…" : "Continue"}
-                </button>
+                </ShineButton>
               </form>
             ) : (
               <button
+                type="button"
                 onClick={() => { setShowDevice(true); setError(null); }}
-                style={{ background: "none", border: "none", padding: 0, marginTop: "0.9rem", color: "#bbb", fontSize: "13px", cursor: "pointer", textDecoration: "underline" }}
+                className="mt-4 block bg-transparent border-0 p-0 text-[13px] text-[#b9bec6] underline cursor-pointer hover:text-[#f7f8f8]"
               >
                 Passkey on your phone or a security key?
               </button>
@@ -259,12 +293,8 @@ export default function LoginPage() {
             <PasskeyHelp />
           </>
         )}
-
-        <p style={{ fontSize: "13px", marginTop: "1.25rem", display: "flex", gap: "1rem" }}>
-          <Link href="/recover" style={{ fontWeight: 600 }}>Lost your device?</Link>
-          <Link href="/signup" style={{ fontWeight: 600 }}>Create an account</Link>
-        </p>
-      </div>
-    </main>
+      </AuthColumn>
+      <AuthPanel />
+    </div>
   );
 }

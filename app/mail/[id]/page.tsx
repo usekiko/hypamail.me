@@ -2,6 +2,10 @@ import { notFound } from "next/navigation";
 import { getSession } from "@/lib/session";
 import { getEmailMeta, markSeen } from "@/lib/jmap";
 import { deleteEmailAction } from "../actions";
+import { SecondaryButton } from "@/components/ui/secondary-button";
+import { SecondaryLink } from "@/components/ui/link-button";
+import { AlertMessage } from "@/components/ui/alert-message";
+import { MIcon } from "@/components/ui/material-icon";
 import MessageBody from "../MessageBody";
 
 export const dynamic = "force-dynamic";
@@ -61,8 +65,8 @@ export default async function ReadPage({ params }: { params: Promise<{ id: strin
       <div className="panel" style={{ padding: "16px", lineHeight: 1.6, overflowWrap: "anywhere" }}>
         <MessageBody emailId={mail.id} />
       </div>
-      <p style={{ color: "#878787", fontSize: "12px", marginTop: "8px", display: "flex", alignItems: "flex-start", gap: "6px" }}>
-        <span className="icon" style={{ fontSize: "16px", marginTop: "2px" }}>lock</span>
+      <p style={{ color: "var(--muted-foreground)", fontSize: "12px", marginTop: "8px", display: "flex", alignItems: "flex-start", gap: "6px" }}>
+        <MIcon name="lock" size={14} style={{ marginTop: "2px" }} />
         <span>This message is stored encrypted — it was decrypted just now, on your device.
         Images, scripts, and all remote content are stripped, which blocks tracking pixels
         and malicious code. Messages may look plainer than in other mail apps.</span>
