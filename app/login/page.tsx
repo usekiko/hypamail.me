@@ -3,37 +3,75 @@
 import Link from "next/link";
 import { useActionState } from "react";
 import { loginAction, type FormState } from "../actions";
+import { ShineButton } from "@/components/ui/shine-button";
+import { TextInput } from "@/components/ui/text-input";
+import { AlertMessage } from "@/components/ui/alert-message";
+import { MIcon } from "@/components/ui/material-icon";
+import { AuthColumn, AuthPanel } from "@/components/auth-panel";
 
 export default function LoginPage() {
   const [state, action, pending] = useActionState<FormState, FormData>(loginAction, null);
   return (
-    <main style={{ minHeight: "100dvh", display: "grid", placeItems: "center", padding: "1.5rem" }}>
-      <div style={{ width: "100%", maxWidth: 500 }}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="https://r2.hypastack.com/cdn/fepvmb5y0u31/hypamail.webp"
-          alt="hypamail"
-          style={{ height: 80, width: "auto", display: "block", marginBottom: "1.5rem" }}
-        />
-        <h1 style={{ fontSize: "1.75rem", fontWeight: 600, margin: "0 0 1.75rem" }}>Login</h1>
-        <form action={action} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+    <div className="flex min-h-screen bg-[#151515]">
+      <AuthColumn
+        title="Sign in"
+        footer={
+          <>
+            No account?{" "}
+            <Link href="/signup" className="text-[#f7f8f8] font-semibold hover:underline">
+              Create one
+            </Link>
+          </>
+        }
+      >
+        <form action={action} className="space-y-4">
           <div>
-            <label className="field-label">Username</label>
-            <input className="inpt" name="username" placeholder="Username" autoComplete="username" autoCapitalize="none" required />
+            <label className="block text-[13px] font-medium text-[#f7f8f8] mb-2 pl-1" htmlFor="username">
+              Username
+            </label>
+            <TextInput
+              id="username"
+              name="username"
+              disabled={pending}
+              placeholder="you"
+              autoComplete="username"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
+              required
+              fullWidth
+              leading={<MIcon name="person" size={16} />}
+            />
           </div>
           <div>
-            <label className="field-label">Password</label>
-            <input className="inpt" name="password" type="password" placeholder="Password" autoComplete="current-password" required />
+            <label className="block text-[13px] font-medium text-[#f7f8f8] mb-2 pl-1" htmlFor="password">
+              Password
+            </label>
+            <TextInput
+              id="password"
+              name="password"
+              type="password"
+              disabled={pending}
+              placeholder="••••••••"
+              autoComplete="current-password"
+              required
+              fullWidth
+              leading={<MIcon name="key" size={16} />}
+            />
           </div>
-          {state?.error && <div style={{ color: "#e06a6a", fontSize: "13px" }}>{state.error}</div>}
-          <button className="btn btn-cancel" type="submit" disabled={pending} style={{ width: "100%", padding: "0.55rem" }}>
-            {pending ? "Logging in…" : "Login"}
-          </button>
+          {state?.error && (
+            <div>
+              <AlertMessage tone="error" style={{ marginBottom: 0 }}>
+                {state.error}
+              </AlertMessage>
+            </div>
+          )}
+          <ShineButton type="submit" disabled={pending} fullWidth variant="primary">
+            {pending ? "Signing in…" : "Sign in"}
+          </ShineButton>
         </form>
-        <p style={{ fontSize: "13px", marginTop: "1.25rem" }}>
-          <Link href="/signup" style={{ fontWeight: 600 }}>Create an account</Link>
-        </p>
-      </div>
-    </main>
+      </AuthColumn>
+      <AuthPanel />
+    </div>
   );
 }
