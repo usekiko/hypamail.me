@@ -51,11 +51,22 @@ async function init(): Promise<void> {
       prf_capable     BOOLEAN NOT NULL DEFAULT false,
       wrapped_key_prf TEXT,
       nickname        TEXT,
+      is_original     BOOLEAN NOT NULL DEFAULT false,
       created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
       last_used_at    TIMESTAMPTZ
     );
+    ALTER TABLE webauthn_credentials ADD COLUMN IF NOT EXISTS is_original BOOLEAN NOT NULL DEFAULT false;
     CREATE INDEX IF NOT EXISTS webauthn_credentials_user
       ON webauthn_credentials (user_id);
+    -- Backfill: mark each user's earliest passkey as the original one if none is
+    -- marked yet (safe + idempotent, covers rows created before this column).
+    UPDATE webauthn_credentials c SET is_original = true
+     WHERE c.id = (
+        SELECT c2.id FROM webauthn_credentials c2
+         WHERE c2.user_id = c.user_id ORDER BY c2.created_at LIMIT 1)
+       AND NOT EXISTS (
+        SELECT 1 FROM webauthn_credentials c3
+         WHERE c3.user_id = c.user_id AND c3.is_original);
     CREATE TABLE IF NOT EXISTS sessions (
       jti         TEXT PRIMARY KEY,
       user_id     BIGINT REFERENCES users(id) ON DELETE CASCADE,
@@ -205,6 +216,7 @@ export interface CredentialRow {
   transports: string[];
   prfCapable: boolean;
   wrappedKeyPrf: string | null;
+  isOriginal: boolean;
 }
 
 function toCredential(r: Record<string, unknown>): CredentialRow {
@@ -216,18 +228,68 @@ function toCredential(r: Record<string, unknown>): CredentialRow {
     transports: r.transports ? (JSON.parse(r.transports as string) as string[]) : [],
     prfCapable: !!r.prf_capable,
     wrappedKeyPrf: (r.wrapped_key_prf as string) ?? null,
+    isOriginal: !!r.is_original,
   };
 }
 
-export async function addCredential(c: CredentialRow & { nickname?: string }): Promise<void> {
+// Display metadata for the Settings passkey list.
+export interface CredentialMeta {
+  id: string;
+  nickname: string | null;
+  isOriginal: boolean;
+  createdAt: string;
+  lastUsedAt: string | null;
+}
+
+export const MAX_PASSKEYS = 3;
+
+export async function addCredential(
+  c: Omit<CredentialRow, "isOriginal"> & { nickname?: string; isOriginal: boolean }
+): Promise<void> {
   await db();
   await getPool().query(
     `INSERT INTO webauthn_credentials (id, user_id, public_key, counter, transports,
-                                       prf_capable, wrapped_key_prf, nickname)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+                                       prf_capable, wrapped_key_prf, nickname, is_original)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
     [c.id, c.userId, c.publicKey, c.counter, JSON.stringify(c.transports),
-     c.prfCapable, c.wrappedKeyPrf, c.nickname ?? null]
+     c.prfCapable, c.wrappedKeyPrf, c.nickname ?? null, c.isOriginal]
   );
+}
+
+export async function countCredentialsForUser(userId: string): Promise<number> {
+  await db();
+  const r = await getPool().query(
+    `SELECT count(*)::int AS n FROM webauthn_credentials WHERE user_id = $1`,
+    [userId]
+  );
+  return r.rows[0].n as number;
+}
+
+export async function listCredentialMeta(userId: string): Promise<CredentialMeta[]> {
+  await db();
+  const r = await getPool().query(
+    `SELECT id, nickname, is_original, created_at, last_used_at
+       FROM webauthn_credentials WHERE user_id = $1
+      ORDER BY is_original DESC, created_at`,
+    [userId]
+  );
+  return r.rows.map((row) => ({
+    id: row.id as string,
+    nickname: (row.nickname as string) ?? null,
+    isOriginal: !!row.is_original,
+    createdAt: (row.created_at as Date).toISOString(),
+    lastUsedAt: row.last_used_at ? (row.last_used_at as Date).toISOString() : null,
+  }));
+}
+
+// Remove one of a user's own passkeys. Returns false if it wasn't theirs.
+export async function removeCredential(id: string, userId: string): Promise<boolean> {
+  await db();
+  const r = await getPool().query(
+    `DELETE FROM webauthn_credentials WHERE id = $1 AND user_id = $2`,
+    [id, userId]
+  );
+  return r.rowCount === 1;
 }
 
 export async function getCredential(id: string): Promise<CredentialRow | null> {

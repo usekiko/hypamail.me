@@ -13,6 +13,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
 import Turnstile from "../ui/Turnstile";
+import PasskeyHelp from "../ui/PasskeyHelp";
 import {
   signupBegin,
   signupComplete,
@@ -206,6 +207,7 @@ export default function SignupPage() {
           {busy ? "Waiting for your device…" : "Create passkey"}
         </button>
         <Err msg={error} />
+        <PasskeyHelp />
       </Shell>
     );
   }

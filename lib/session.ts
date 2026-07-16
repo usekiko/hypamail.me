@@ -90,7 +90,7 @@ export async function destroySession(): Promise<void> {
 // ---------- ceremony cookies (WebAuthn challenges & signup state) ----------
 
 export interface CeremonyData extends JWTPayload {
-  kind: "signup" | "login" | "recovery" | "add-passkey";
+  kind: "signup" | "login" | "login-totp" | "recovery" | "add-passkey";
   challenge: string;
   username?: string;
   invite?: string;

@@ -1,28 +1,94 @@
 "use client";
 
-// Minimal account settings: add a passkey on the current device. Useful after
-// signing in on a new machine via QR-code cross-device auth or recovery words.
+// Passkey management. Adding or removing a passkey always requires the recovery
+// code + a TOTP code (even though you're signed in), so a stolen session can't
+// enroll or strip a device. Max 3 passkeys; only the original (signup) passkey
+// logs in with a single tap, the rest also ask for a TOTP code at login.
 import Link from "next/link";
-import { useState } from "react";
-import { addPasskeyBegin, addPasskeyComplete } from "../../actions";
-import { webauthnCreate, wrapWithPrf, loadMailKey } from "@/lib/client/crypto";
+import { useCallback, useEffect, useState } from "react";
+import {
+  listPasskeys,
+  addPasskeyBegin,
+  addPasskeyComplete,
+  removePasskey,
+} from "../../actions";
+import {
+  deriveRecoveryAuthKey,
+  unwrapWithRecovery,
+  webauthnCreate,
+  wrapWithPrf,
+  recoveryWordsValid,
+  loadMailKey,
+} from "@/lib/client/crypto";
+import PasskeyHelp from "../../ui/PasskeyHelp";
+
+interface Passkey {
+  id: string;
+  nickname: string | null;
+  isOriginal: boolean;
+  createdAt: string;
+  lastUsedAt: string | null;
+}
+
+type Mode = { kind: "view" } | { kind: "add" } | { kind: "remove"; id: string };
 
 export default function SettingsPage() {
+  const [passkeys, setPasskeys] = useState<Passkey[] | null>(null);
+  const [max, setMax] = useState(3);
+  const [mode, setMode] = useState<Mode>({ kind: "view" });
+  const [words, setWords] = useState("");
+  const [totpCode, setTotpCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [added, setAdded] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
-  async function onAdd() {
+  const reload = useCallback(async () => {
+    const res = await listPasskeys();
+    if (res.passkeys) {
+      setPasskeys(res.passkeys);
+      if (res.max) setMax(res.max);
+    }
+  }, []);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  function resetForm(next: Mode) {
+    setMode(next);
+    setWords("");
+    setTotpCode("");
     setError(null);
+    setNotice(null);
+  }
+
+  async function onAdd(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
+    if (!recoveryWordsValid(words)) {
+      setError("That doesn't look like a valid 12-word recovery code.");
+      return;
+    }
     setBusy(true);
     try {
-      const begin = await addPasskeyBegin();
-      if (begin.error || !begin.optionsJSON) {
+      const recoveryAuthKey = await deriveRecoveryAuthKey(words);
+      const begin = await addPasskeyBegin({ recoveryAuthKey, totpCode });
+      if (begin.error || !begin.optionsJSON || !begin.wrappedKeyRecovery) {
         setError(begin.error || "Could not start passkey setup.");
         return;
       }
       const created = await webauthnCreate(begin.optionsJSON);
-      const mailKey = loadMailKey();
+      // The new passkey needs its own PRF-wrapped copy of the mail key. Unwrap
+      // the source key from the recovery blob with the words just entered
+      // (falling back to the already-unlocked key if present).
+      let mailKey = loadMailKey();
+      if (!mailKey) {
+        try {
+          mailKey = await unwrapWithRecovery(words, begin.wrappedKeyRecovery);
+        } catch {
+          mailKey = null;
+        }
+      }
       const res = await addPasskeyComplete({
         attestation: created.responseJSON,
         prfCapable: created.prfEnabled,
@@ -33,19 +99,101 @@ export default function SettingsPage() {
         setError(res.error || "Could not save the passkey.");
         return;
       }
-      setAdded(true);
+      await reload();
+      resetForm({ kind: "view" });
+      setNotice("Passkey added. Signing in with it will also ask for a code from your authenticator.");
     } catch (err) {
       setError(
         err instanceof DOMException && err.name === "InvalidStateError"
           ? "This device already has a passkey for your account."
           : err instanceof DOMException && err.name === "NotAllowedError"
             ? "Passkey creation was cancelled."
-            : "This browser couldn't create a passkey."
+            : "This browser couldn't create a passkey — see the help below."
       );
     } finally {
       setBusy(false);
     }
   }
+
+  async function onRemove(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (mode.kind !== "remove") return;
+    setError(null);
+    if (!recoveryWordsValid(words)) {
+      setError("That doesn't look like a valid 12-word recovery code.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const recoveryAuthKey = await deriveRecoveryAuthKey(words);
+      const res = await removePasskey({ recoveryAuthKey, totpCode, credentialId: mode.id });
+      if (!res.ok) {
+        setError(res.error || "Could not remove the passkey.");
+        return;
+      }
+      await reload();
+      resetForm({ kind: "view" });
+      setNotice("Passkey removed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const atMax = passkeys !== null && passkeys.length >= max;
+
+  const GateForm = ({
+    onSubmit,
+    submitLabel,
+    danger,
+  }: {
+    onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
+    submitLabel: string;
+    danger?: boolean;
+  }) => (
+    <form onSubmit={onSubmit} style={{ display: "flex", flexDirection: "column", gap: "0.75rem", marginTop: "0.75rem" }}>
+      <p style={{ color: "#878787", fontSize: "13px", margin: 0, lineHeight: 1.6 }}>
+        For your security this needs your recovery code and an authenticator code.
+      </p>
+      <textarea
+        className="inpt"
+        rows={2}
+        placeholder="your 12 recovery words"
+        value={words}
+        onChange={(e) => setWords(e.target.value)}
+        autoComplete="off"
+        autoCapitalize="none"
+        spellCheck={false}
+        required
+        style={{ height: "auto", padding: "9px 10px", fontFamily: "ui-monospace, monospace", resize: "vertical" }}
+      />
+      <input
+        className="inpt"
+        inputMode="numeric"
+        pattern="[0-9]{6}"
+        maxLength={6}
+        placeholder="authenticator code"
+        autoComplete="one-time-code"
+        value={totpCode}
+        onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ""))}
+        required
+        style={{ fontFamily: "ui-monospace, monospace", letterSpacing: "0.2em" }}
+      />
+      {error && <div style={{ color: "#e06a6a", fontSize: "13px" }}>{error}</div>}
+      <div style={{ display: "flex", gap: "0.5rem" }}>
+        <button
+          className={danger ? "btn btn-cancel" : "btn btn-primary"}
+          type="submit"
+          disabled={busy || totpCode.length !== 6 || !words.trim()}
+          style={{ padding: "0.5rem 1.25rem", ...(danger ? { color: "#e06a6a" } : {}) }}
+        >
+          {busy ? "Working…" : submitLabel}
+        </button>
+        <button type="button" className="btn btn-cancel" onClick={() => resetForm({ kind: "view" })} style={{ padding: "0.5rem 1.25rem" }}>
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
 
   return (
     <div>
@@ -53,20 +201,82 @@ export default function SettingsPage() {
         <h1 style={{ fontSize: "1.1rem", margin: 0, fontWeight: 700 }}>settings</h1>
         <Link href="/mail" style={{ color: "#878787", fontSize: "13px" }}>back to inbox</Link>
       </div>
+
       <div className="panel" style={{ padding: "16px" }}>
-        <b style={{ fontSize: "14px" }}>Passkeys</b>
-        <p style={{ color: "#878787", fontSize: "13px", margin: "0.5rem 0 1rem", lineHeight: 1.6 }}>
-          Add a passkey on this device so signing in here is one tap. Your account can have
-          any number of passkeys — one per device you use.
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "0.5rem" }}>
+          <b style={{ fontSize: "14px" }}>Passkeys</b>
+          <span style={{ color: "#878787", fontSize: "12px" }}>
+            {passkeys ? `${passkeys.length} / ${max}` : ""}
+          </span>
+        </div>
+        <p style={{ color: "#878787", fontSize: "13px", margin: "0 0 1rem", lineHeight: 1.6 }}>
+          Your <b style={{ color: "#ddd" }}>original</b> passkey signs you in with one tap. Passkeys
+          you add here also ask for an authenticator code when signing in. Adding or removing a
+          passkey always needs your recovery code + authenticator code.
         </p>
-        {added ? (
-          <div style={{ color: "#7bb97b", fontSize: "13px" }}>Passkey added ✓</div>
+
+        {notice && <div style={{ color: "#7bb97b", fontSize: "13px", marginBottom: "0.75rem" }}>{notice}</div>}
+
+        {passkeys === null ? (
+          <div style={{ color: "#878787", fontSize: "13px" }}>Loading…</div>
         ) : (
-          <button className="btn btn-primary" onClick={onAdd} disabled={busy} style={{ padding: "0.55rem 1.5rem" }}>
-            {busy ? "Waiting for your device…" : "Add a passkey on this device"}
-          </button>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+            {passkeys.map((p, i) => (
+              <div key={p.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", borderRadius: 6, background: "#1a1a1a" }}>
+                <div>
+                  <div style={{ fontSize: "13px", display: "flex", alignItems: "center", gap: "8px" }}>
+                    {p.isOriginal ? "Original passkey" : p.nickname || `Passkey ${i + 1}`}
+                    {p.isOriginal && (
+                      <span style={{ fontSize: "11px", color: "#7bb97b", border: "1px solid #2c3a2c", borderRadius: 4, padding: "0 6px" }}>one-tap</span>
+                    )}
+                  </div>
+                  <div style={{ color: "#878787", fontSize: "11px", marginTop: 2 }}>
+                    added {new Date(p.createdAt).toLocaleDateString()}
+                    {p.lastUsedAt ? ` · last used ${new Date(p.lastUsedAt).toLocaleDateString()}` : " · not used yet"}
+                  </div>
+                </div>
+                {mode.kind === "remove" && mode.id === p.id ? null : (
+                  <button
+                    className="btn btn-cancel"
+                    onClick={() => resetForm({ kind: "remove", id: p.id })}
+                    style={{ padding: "0.35rem 0.9rem", fontSize: "12px" }}
+                  >
+                    remove
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
         )}
-        {error && <div style={{ color: "#e06a6a", fontSize: "13px", marginTop: "0.75rem" }}>{error}</div>}
+
+        {mode.kind === "remove" && (
+          <div style={{ marginTop: "0.75rem", padding: "12px", borderRadius: 6, border: "1px solid #3a2c2c" }}>
+            <div style={{ fontSize: "13px", color: "#e06a6a" }}>Remove this passkey?</div>
+            <GateForm onSubmit={onRemove} submitLabel="Remove passkey" danger />
+          </div>
+        )}
+
+        {mode.kind === "add" && <GateForm onSubmit={onAdd} submitLabel="Create passkey" />}
+
+        {mode.kind === "view" && (
+          <div style={{ marginTop: "1rem" }}>
+            <button
+              className="btn btn-primary"
+              onClick={() => resetForm({ kind: "add" })}
+              disabled={atMax}
+              style={{ padding: "0.55rem 1.5rem" }}
+            >
+              Add a passkey
+            </button>
+            {atMax && (
+              <span style={{ color: "#878787", fontSize: "12px", marginLeft: "0.75rem" }}>
+                You&apos;ve reached the maximum of {max}. Remove one to add another.
+              </span>
+            )}
+          </div>
+        )}
+
+        <PasskeyHelp />
       </div>
     </div>
   );

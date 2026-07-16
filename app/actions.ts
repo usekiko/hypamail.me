@@ -40,11 +40,16 @@ import {
   getCredentialsForUser,
   touchCredential,
   setCredentialPrfWrap,
+  countCredentialsForUser,
+  listCredentialMeta,
+  removeCredential,
   recoveryHashMatches,
   hashIp,
   isRateLimited,
   recordAttempt,
   clearAttempts,
+  MAX_PASSKEYS,
+  type CredentialMeta,
 } from "@/lib/db";
 import type {
   RegistrationResponseJSON,
@@ -59,6 +64,11 @@ const SIGNUP_MAX = 10;
 const SIGNUP_WINDOW = 600;
 const RECOVERY_MAX = 5;
 const RECOVERY_WINDOW = 600;
+// TOTP gate on non-original passkey logins, and on passkey management.
+const LOGIN_TOTP_MAX = 6;
+const LOGIN_TOTP_WINDOW = 600;
+const MANAGE_MAX = 6;
+const MANAGE_WINDOW = 600;
 
 // Real client IP. We trust ONLY Cloudflare's CF-Connecting-IP, which Cloudflare
 // sets authoritatively and a client cannot override. We deliberately do NOT fall
@@ -259,6 +269,7 @@ export async function signupComplete(payload: {
     transports: cred.transports,
     prfCapable: payload.prfCapable,
     wrappedKeyPrf: payload.wrappedKeyPrf,
+    isOriginal: true, // the signup passkey: one-tap login, no TOTP
   });
 
   await clearAttempts(ipHash, "signup");
@@ -279,6 +290,7 @@ export async function loginBegin(): Promise<{ optionsJSON: unknown }> {
 export interface LoginCompleteResult {
   error?: string;
   ok?: boolean;
+  needTotp?: boolean; // non-original passkey: prove TOTP before the session is issued
   wrappedKeyPrf?: string | null;
   wrappedKeyRecovery?: string;
   prfCapable?: boolean;
@@ -306,6 +318,60 @@ export async function loginComplete(payload: {
   if (!user) return { error: "Account no longer exists." };
 
   await touchCredential(credential.id, newCounter);
+
+  // Only the original (signup) passkey logs in with a single tap. Any passkey
+  // added later must also pass a TOTP code — we've proven possession, but hold
+  // the session until the second factor is in.
+  if (!credential.isOriginal) {
+    await setCeremony({
+      kind: "login-totp",
+      challenge: "", // unused; the passkey is already verified
+      userId: user.id,
+    });
+    return { needTotp: true };
+  }
+
+  await createSession(user.id, user.email);
+  return {
+    ok: true,
+    wrappedKeyPrf: credential.wrappedKeyPrf,
+    wrappedKeyRecovery: user.wrappedKeyRecovery,
+    prfCapable: credential.prfCapable,
+  };
+}
+
+// Second step for a non-original passkey login: the TOTP gate. The passkey was
+// already verified in loginComplete; this issues the session on a valid code.
+export async function loginTotp(payload: {
+  credentialId: string;
+  totpCode: string;
+}): Promise<LoginCompleteResult> {
+  const ceremony = await takeCeremony("login-totp");
+  if (!ceremony?.userId) return { error: "Login session expired — start again." };
+
+  const ipHash = await clientIpHash();
+  const userKeyHash = hashIp(`user:${ceremony.userId}`);
+  if (
+    (await isRateLimited(ipHash, "login-totp", LOGIN_TOTP_MAX, LOGIN_TOTP_WINDOW)) ||
+    (await isRateLimited(userKeyHash, "login-totp", LOGIN_TOTP_MAX, LOGIN_TOTP_WINDOW))
+  ) {
+    return { error: "Too many attempts. Please wait a few minutes and try again." };
+  }
+
+  const user = await getUserById(ceremony.userId);
+  const credential = await getCredential(payload.credentialId);
+  if (!user || !credential || credential.userId !== user.id) {
+    return { error: "Login session expired — start again." };
+  }
+
+  if (!verifyTotp(decryptSecret(user.totpSecretEnc), payload.totpCode)) {
+    await recordAttempt(ipHash, "login-totp");
+    await recordAttempt(userKeyHash, "login-totp");
+    return { error: "Wrong authenticator code." };
+  }
+
+  await clearAttempts(ipHash, "login-totp");
+  await clearAttempts(userKeyHash, "login-totp");
   await createSession(user.id, user.email);
   return {
     ok: true,
@@ -362,16 +428,66 @@ export async function recoveryLogin(payload: {
 }
 
 // ---------------------------------------------------------------------------
-// Add a passkey to an existing (logged-in) account.
+// Passkey management (Settings). Adding, resetting, or removing a passkey ALWAYS
+// requires the recovery code + a TOTP code — even while signed in — so a stolen
+// live session can't enroll or strip a device. Max 3 passkeys per account.
 // ---------------------------------------------------------------------------
 
-export async function addPasskeyBegin(): Promise<{ error?: string; optionsJSON?: unknown }> {
+// Shared gate: valid session + recovery-code proof + TOTP. Returns the user or
+// an error string.
+async function manageGate(
+  recoveryAuthKey: string,
+  totpCode: string
+): Promise<{ user: NonNullable<Awaited<ReturnType<typeof getUserById>>> } | { error: string }> {
   const session = await getSession();
   if (!session) return { error: "Not signed in." };
-  const existing = await getCredentialsForUser(session.userId);
-  const options = await registrationOptions(session.username, existing);
-  await setCeremony({ kind: "add-passkey", challenge: options.challenge, userId: session.userId });
-  return { optionsJSON: options };
+
+  const ipHash = await clientIpHash();
+  const userKeyHash = hashIp(`user:${session.userId}`);
+  if (
+    (await isRateLimited(ipHash, "manage", MANAGE_MAX, MANAGE_WINDOW)) ||
+    (await isRateLimited(userKeyHash, "manage", MANAGE_MAX, MANAGE_WINDOW))
+  ) {
+    return { error: "Too many attempts. Please wait a few minutes and try again." };
+  }
+
+  const user = session.user;
+  const bad = async () => {
+    await recordAttempt(ipHash, "manage");
+    await recordAttempt(userKeyHash, "manage");
+    return { error: "Wrong recovery code or authenticator code." };
+  };
+  if (!recoveryHashMatches(user.recoveryAuthHash, sha256hex(recoveryAuthKey))) return bad();
+  if (!verifyTotp(decryptSecret(user.totpSecretEnc), totpCode)) return bad();
+
+  await clearAttempts(ipHash, "manage");
+  await clearAttempts(userKeyHash, "manage");
+  return { user };
+}
+
+export async function listPasskeys(): Promise<{ error?: string; passkeys?: CredentialMeta[]; max?: number }> {
+  const session = await getSession();
+  if (!session) return { error: "Not signed in." };
+  return { passkeys: await listCredentialMeta(session.userId), max: MAX_PASSKEYS };
+}
+
+export async function addPasskeyBegin(payload: {
+  recoveryAuthKey: string;
+  totpCode: string;
+}): Promise<{ error?: string; optionsJSON?: unknown; wrappedKeyRecovery?: string }> {
+  const gate = await manageGate(payload.recoveryAuthKey, payload.totpCode);
+  if ("error" in gate) return { error: gate.error };
+  const { user } = gate;
+
+  if ((await countCredentialsForUser(user.id)) >= MAX_PASSKEYS) {
+    return { error: `You can have at most ${MAX_PASSKEYS} passkeys. Remove one first.` };
+  }
+  const existing = await getCredentialsForUser(user.id);
+  const options = await registrationOptions(user.username, existing);
+  await setCeremony({ kind: "add-passkey", challenge: options.challenge, userId: user.id });
+  // The client re-wraps the mail key under the new passkey's PRF; it unwraps the
+  // source key from the recovery blob using the words it already collected.
+  return { optionsJSON: options, wrappedKeyRecovery: user.wrappedKeyRecovery };
 }
 
 export async function addPasskeyComplete(payload: {
@@ -385,6 +501,10 @@ export async function addPasskeyComplete(payload: {
   const ceremony = await takeCeremony("add-passkey");
   if (!ceremony || ceremony.userId !== session.userId) {
     return { error: "Ceremony expired — try again." };
+  }
+  // Re-check the cap at commit time (guards a double-submit race).
+  if ((await countCredentialsForUser(session.userId)) >= MAX_PASSKEYS) {
+    return { error: `You can have at most ${MAX_PASSKEYS} passkeys.` };
   }
   const cred = await verifyRegistration(
     payload.attestation as RegistrationResponseJSON,
@@ -400,7 +520,20 @@ export async function addPasskeyComplete(payload: {
     prfCapable: payload.prfCapable,
     wrappedKeyPrf: payload.wrappedKeyPrf,
     nickname: payload.nickname?.slice(0, 60),
+    isOriginal: false, // added later → login with it also requires TOTP
   });
+  return { ok: true };
+}
+
+export async function removePasskey(payload: {
+  recoveryAuthKey: string;
+  totpCode: string;
+  credentialId: string;
+}): Promise<{ error?: string; ok?: boolean }> {
+  const gate = await manageGate(payload.recoveryAuthKey, payload.totpCode);
+  if ("error" in gate) return { error: gate.error };
+  const removed = await removeCredential(payload.credentialId, gate.user.id);
+  if (!removed) return { error: "That passkey isn't on your account." };
   return { ok: true };
 }
 
