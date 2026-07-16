@@ -30,6 +30,19 @@ async function init(): Promise<void> {
       used_at     TIMESTAMPTZ,
       used_by     TEXT
     );
+    -- Upgrade from the plaintext-code era. CREATE TABLE IF NOT EXISTS above is a
+    -- no-op on a database that already has the old table, so the rename has to be
+    -- explicit: hash the codes in place and unused invites keep working (the hash
+    -- matches hashInvite()).
+    DO $$
+    BEGIN
+      IF EXISTS (SELECT 1 FROM information_schema.columns
+                  WHERE table_schema = 'public' AND table_name = 'invite_codes'
+                    AND column_name = 'code') THEN
+        ALTER TABLE invite_codes RENAME COLUMN code TO code_hash;
+        UPDATE invite_codes SET code_hash = encode(sha256(code_hash::bytea), 'hex');
+      END IF;
+    END $$;
     CREATE TABLE IF NOT EXISTS users (
       id                   BIGSERIAL PRIMARY KEY,
       username             TEXT NOT NULL UNIQUE,
@@ -78,6 +91,13 @@ async function init(): Promise<void> {
       created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
       expires_at  TIMESTAMPTZ NOT NULL
     );
+    -- Upgrade from the password-era sessions table, which predates users and has
+    -- no user_id. Same story as invite_codes: the CREATE above skips an existing
+    -- table, so without this every login would insert into a missing column.
+    ALTER TABLE sessions ADD COLUMN IF NOT EXISTS user_id BIGINT REFERENCES users(id) ON DELETE CASCADE;
+    -- Password-era rows can never resolve to a user now, so they're dead weight
+    -- that getSession would reject anyway. Drop them rather than leave them to expire.
+    DELETE FROM sessions WHERE user_id IS NULL;
     CREATE TABLE IF NOT EXISTS auth_attempts (
       ip_hash     TEXT NOT NULL,
       kind        TEXT NOT NULL,
