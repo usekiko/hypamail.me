@@ -2,46 +2,76 @@
 
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
-import { authenticate } from "@/lib/jmap";
-import { createSession, destroySession } from "@/lib/session";
+import { createHash } from "crypto";
 import {
   provisionAccount,
+  deleteAccount,
+  uploadEncryptionKey,
   validateUsername,
   usernameTaken,
   verifyTurnstile,
   generatePassword,
 } from "@/lib/admin";
 import {
+  registrationOptions,
+  verifyRegistration,
+  authenticationOptions,
+  verifyAuthentication,
+} from "@/lib/webauthn";
+import { generateTotpSecret, totpUri, verifyTotp } from "@/lib/totp";
+import { encryptSecret, decryptSecret } from "@/lib/secrets";
+import {
+  createSession,
+  destroySession,
+  getSession,
+  setCeremony,
+  takeCeremony,
+} from "@/lib/session";
+import {
+  inviteCodeUsable,
   consumeInviteCode,
   releaseInviteCode,
+  usernameExists,
+  createUser,
+  getUserByUsername,
+  getUserById,
+  addCredential,
+  getCredential,
+  getCredentialsForUser,
+  touchCredential,
+  setCredentialPrfWrap,
+  recoveryHashMatches,
   hashIp,
   isRateLimited,
   recordAttempt,
   clearAttempts,
 } from "@/lib/db";
-import { inviteRequired } from "@/constants/invite";
+import type {
+  RegistrationResponseJSON,
+  AuthenticationResponseJSON,
+} from "@simplewebauthn/server";
 
 const DOMAIN = process.env.MAIL_DOMAIN || "hypamail.me";
 
-// Brute-force limits, keyed by hashed client IP.
-const LOGIN_MAX = 8;
-const LOGIN_WINDOW = 600; // 10 min
+// Brute-force limits, keyed by hashed client IP (and hashed username for the
+// recovery flow, so a distributed attack can't focus one account).
 const SIGNUP_MAX = 10;
 const SIGNUP_WINDOW = 600;
-
-export type FormState = { error?: string; ok?: boolean; email?: string; password?: string } | null;
+const RECOVERY_MAX = 5;
+const RECOVERY_WINDOW = 600;
 
 // Real client IP. We trust ONLY Cloudflare's CF-Connecting-IP, which Cloudflare
 // sets authoritatively and a client cannot override. We deliberately do NOT fall
 // back to X-Forwarded-For: a client can pre-set that header and Cloudflare merely
-// appends to it, so `xff.split(",")[0]` is attacker-controlled — trusting it would
-// let anyone rotate the rate-limit key on every request and defeat brute-force /
-// credential-stuffing protection (even through Cloudflare). Requests arriving
-// without the CF header (i.e. not via the proxy) collapse to one "unknown" bucket,
-// which fails closed. Keep the origin firewalled to Cloudflare IP ranges so this
-// header is always present and trustworthy.
+// appends to it, so trusting it would let anyone rotate the rate-limit key on
+// every request. Requests arriving without the CF header collapse to one
+// "unknown" bucket, which fails closed. (In dev there is no Cloudflare, so we
+// fall back to localhost to keep the limiter usable.)
 function clientIp(h: Headers): string | null {
-  return h.get("cf-connecting-ip")?.trim() || null;
+  const cf = h.get("cf-connecting-ip")?.trim();
+  if (cf) return cf;
+  if (process.env.NODE_ENV === "development") return "127.0.0.1";
+  return null;
 }
 
 async function clientIpHash(): Promise<string> {
@@ -49,39 +79,36 @@ async function clientIpHash(): Promise<string> {
   return hashIp(clientIp(h) || "unknown");
 }
 
-export async function loginAction(_prev: FormState, formData: FormData): Promise<FormState> {
-  const id = String(formData.get("username") || "").trim().toLowerCase();
-  const password = String(formData.get("password") || "");
-  if (!id || !password) return { error: "Enter your username and password." };
-  const email = id.includes("@") ? id : `${id}@${DOMAIN}`;
-
-  // The app talks to Stalwart over localhost, so the mail server can't see the
-  // real client IP — rate-limit here (hashed IP) to stop password brute-force.
-  const ipHash = await clientIpHash();
-  if (await isRateLimited(ipHash, "login", LOGIN_MAX, LOGIN_WINDOW)) {
-    return { error: "Too many attempts. Please wait a few minutes and try again." };
-  }
-
-  let accountId: string | null;
-  try {
-    accountId = await authenticate(email, password);
-  } catch {
-    return { error: "Server error. Please try again." };
-  }
-  if (!accountId) {
-    await recordAttempt(ipHash, "login");
-    return { error: "Wrong username or password." };
-  }
-
-  await clearAttempts(ipHash, "login");
-  await createSession({ email, password, accountId });
-  redirect("/mail");
+function sha256hex(s: string): string {
+  return createHash("sha256").update(s).digest("hex");
 }
 
-export async function signupAction(_prev: FormState, formData: FormData): Promise<FormState> {
-  const username = String(formData.get("username") || "").trim().toLowerCase();
-  const invite = String(formData.get("invite") || "").trim();
-  const token = String(formData.get("cf-turnstile-response") || "");
+// ---------------------------------------------------------------------------
+// Signup — three-phase wizard, committed atomically at the end:
+//   1. signupBegin: validate invite+captcha+username, mint WebAuthn challenge
+//      and pending TOTP secret (both live only in an encrypted 15-min cookie).
+//   2. (client) create passkey, generate mail keypair + recovery words, wrap
+//      the private key, scan TOTP QR.
+//   3. signupComplete: verify passkey attestation + TOTP proof, consume the
+//      invite, provision the mailbox, upload the PGP public key, store the
+//      user. Nothing is written anywhere until this step succeeds.
+// ---------------------------------------------------------------------------
+
+export interface SignupBeginResult {
+  error?: string;
+  optionsJSON?: unknown;
+  totpUri?: string;
+  totpSecret?: string;
+  email?: string;
+}
+
+export async function signupBegin(formData: {
+  username: string;
+  invite: string;
+  turnstileToken: string;
+}): Promise<SignupBeginResult> {
+  const username = String(formData.username || "").trim().toLowerCase();
+  const invite = String(formData.invite || "").trim();
 
   const ipHash = await clientIpHash();
   if (await isRateLimited(ipHash, "signup", SIGNUP_MAX, SIGNUP_WINDOW)) {
@@ -96,43 +123,320 @@ export async function signupAction(_prev: FormState, formData: FormData): Promis
   if (needsInvite && !invite) return { error: "An invite code is required." };
 
   const ip = clientIp(await headers()) ?? undefined;
-  if (!(await verifyTurnstile(token, ip))) {
+  if (!(await verifyTurnstile(formData.turnstileToken, ip))) {
     await recordAttempt(ipHash, "signup");
     return { error: "Bot check failed. Please retry." };
   }
 
-  if (await usernameTaken(username)) {
-    await recordAttempt(ipHash, "signup");
-    return { error: "That username is already taken." };
-  }
-
-  // Password is generated for the user, never chosen.
-  const password = generatePassword();
-  const email = `${username}@${DOMAIN}`;
-  if (needsInvite && !(await consumeInviteCode(invite, email))) {
+  if (!(await inviteCodeUsable(invite))) {
     await recordAttempt(ipHash, "signup");
     return { error: "Invalid or already-used invite code." };
   }
 
-  try {
-    await provisionAccount(username, password);
-  } catch {
-    if (needsInvite) await releaseInviteCode(invite);
-    // Most likely cause is a concurrent signup that claimed the same username
-    // between our check and the create — surface that precisely.
-    if (await usernameTaken(username)) return { error: "That username is already taken." };
-    return { error: "Could not create the account. Please try again." };
+  if ((await usernameExists(username)) || (await usernameTaken(username))) {
+    await recordAttempt(ipHash, "signup");
+    return { error: "That username is already taken." };
   }
 
-  try {
-    const accountId = await authenticate(email, password);
-    if (accountId) await createSession({ email, password, accountId });
-  } catch {
-    // Account exists; session just couldn't be established. Still show the
-    // credentials so the user can sign in manually.
+  const options = await registrationOptions(username);
+  const totpSecret = generateTotpSecret();
+  const email = `${username}@${DOMAIN}`;
+  await setCeremony({
+    kind: "signup",
+    challenge: options.challenge,
+    username,
+    invite,
+    totpSecret,
+  });
+  return {
+    optionsJSON: options,
+    totpUri: totpUri(totpSecret, email),
+    totpSecret,
+    email,
+  };
+}
+
+export interface SignupCompleteResult {
+  error?: string;
+  fatal?: boolean; // true → wizard must restart from step 1
+  ok?: boolean;
+}
+
+export async function signupComplete(payload: {
+  attestation: unknown;
+  prfCapable: boolean;
+  wrappedKeyPrf: string | null;
+  wrappedKeyRecovery: string;
+  recoveryAuthKey: string;
+  pgpPublicKey: string;
+  totpCode: string;
+}): Promise<SignupCompleteResult> {
+  const ceremony = await takeCeremony("signup");
+  if (!ceremony?.username || !ceremony.invite || !ceremony.totpSecret) {
+    return { error: "Signup session expired — please start over.", fatal: true };
   }
-  // Don't redirect — return the credentials so the user can save the generated password.
-  return { ok: true, email, password };
+  const { username, invite, totpSecret } = ceremony;
+  const email = `${username}@${DOMAIN}`;
+
+  const ipHash = await clientIpHash();
+  if (await isRateLimited(ipHash, "signup", SIGNUP_MAX, SIGNUP_WINDOW)) {
+    return { error: "Too many attempts. Please wait a few minutes.", fatal: true };
+  }
+
+  // Basic shape checks on the client-supplied crypto material.
+  if (
+    !payload.pgpPublicKey?.includes("BEGIN PGP PUBLIC KEY BLOCK") ||
+    !payload.wrappedKeyRecovery ||
+    !payload.recoveryAuthKey
+  ) {
+    return { error: "Malformed signup payload.", fatal: true };
+  }
+
+  // The ceremony cookie was consumed above and is single-use by design, so TOTP
+  // codes can't be brute-forced against one challenge: a wrong code restarts
+  // the wizard.
+  if (!verifyTotp(totpSecret, payload.totpCode)) {
+    await recordAttempt(ipHash, "signup");
+    return { error: "Wrong authenticator code — signup restarted for safety.", fatal: true };
+  }
+
+  const cred = await verifyRegistration(
+    payload.attestation as RegistrationResponseJSON,
+    ceremony.challenge
+  );
+  if (!cred) {
+    await recordAttempt(ipHash, "signup");
+    return { error: "Passkey could not be verified — please start over.", fatal: true };
+  }
+
+  if ((await usernameExists(username)) || (await usernameTaken(username))) {
+    return { error: "That username is already taken.", fatal: true };
+  }
+
+  if (!(await consumeInviteCode(invite, email))) {
+    return { error: "Invalid or already-used invite code.", fatal: true };
+  }
+
+  // Internal mailbox credential: random, never shown to anyone, only unlocks
+  // ciphertext. Stored encrypted server-side.
+  const mailPassword = generatePassword();
+  let accountId: string;
+  try {
+    accountId = await provisionAccount(username, mailPassword);
+  } catch {
+    await releaseInviteCode(invite);
+    if (await usernameTaken(username)) return { error: "That username is already taken.", fatal: true };
+    return { error: "Could not create the mailbox. Please try again.", fatal: true };
+  }
+
+  // Encryption-at-rest key upload. If this fails the mailbox would store
+  // plaintext, which violates the whole design — tear the account down.
+  try {
+    await uploadEncryptionKey(email, mailPassword, payload.pgpPublicKey);
+  } catch {
+    try {
+      await deleteAccount(username);
+    } catch {}
+    await releaseInviteCode(invite);
+    return { error: "Could not enable mailbox encryption. Please try again.", fatal: true };
+  }
+
+  const userId = await createUser({
+    username,
+    email,
+    accountId,
+    encMailPassword: encryptSecret(mailPassword),
+    pgpPublicKey: payload.pgpPublicKey,
+    wrappedKeyRecovery: payload.wrappedKeyRecovery,
+    recoveryAuthHash: sha256hex(payload.recoveryAuthKey),
+    totpSecretEnc: encryptSecret(totpSecret),
+  });
+  await addCredential({
+    id: cred.id,
+    userId,
+    publicKey: cred.publicKey,
+    counter: cred.counter,
+    transports: cred.transports,
+    prfCapable: payload.prfCapable,
+    wrappedKeyPrf: payload.wrappedKeyPrf,
+  });
+
+  await clearAttempts(ipHash, "signup");
+  await createSession(userId, email);
+  return { ok: true };
+}
+
+// ---------------------------------------------------------------------------
+// Passkey login (usernameless / discoverable)
+// ---------------------------------------------------------------------------
+
+export async function loginBegin(): Promise<{ optionsJSON: unknown }> {
+  const options = await authenticationOptions();
+  await setCeremony({ kind: "login", challenge: options.challenge });
+  return { optionsJSON: options };
+}
+
+export interface LoginCompleteResult {
+  error?: string;
+  ok?: boolean;
+  wrappedKeyPrf?: string | null;
+  wrappedKeyRecovery?: string;
+  prfCapable?: boolean;
+}
+
+export async function loginComplete(payload: {
+  assertion: unknown;
+}): Promise<LoginCompleteResult> {
+  const ceremony = await takeCeremony("login");
+  if (!ceremony) return { error: "Login session expired — try again." };
+
+  const assertion = payload.assertion as AuthenticationResponseJSON;
+  const credential = await getCredential(assertion.id);
+  if (!credential) return { error: "Unknown passkey. Try account recovery instead." };
+
+  let newCounter: number | null;
+  try {
+    newCounter = await verifyAuthentication(assertion, ceremony.challenge, credential);
+  } catch {
+    newCounter = null;
+  }
+  if (newCounter === null) return { error: "Passkey could not be verified." };
+
+  const user = await getUserById(credential.userId);
+  if (!user) return { error: "Account no longer exists." };
+
+  await touchCredential(credential.id, newCounter);
+  await createSession(user.id, user.email);
+  return {
+    ok: true,
+    wrappedKeyPrf: credential.wrappedKeyPrf,
+    wrappedKeyRecovery: user.wrappedKeyRecovery,
+    prfCapable: credential.prfCapable,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Recovery login: username + recovery-code-derived auth key + mandatory TOTP.
+// ---------------------------------------------------------------------------
+
+export interface RecoveryLoginResult {
+  error?: string;
+  ok?: boolean;
+  wrappedKeyRecovery?: string;
+}
+
+export async function recoveryLogin(payload: {
+  username: string;
+  recoveryAuthKey: string;
+  totpCode: string;
+}): Promise<RecoveryLoginResult> {
+  const username = String(payload.username || "").trim().toLowerCase();
+  const ipHash = await clientIpHash();
+  const userKeyHash = hashIp(`user:${username}`);
+
+  if (
+    (await isRateLimited(ipHash, "recovery", RECOVERY_MAX, RECOVERY_WINDOW)) ||
+    (await isRateLimited(userKeyHash, "recovery", RECOVERY_MAX, RECOVERY_WINDOW))
+  ) {
+    return { error: "Too many attempts. Please wait a few minutes and try again." };
+  }
+
+  const fail = async () => {
+    await recordAttempt(ipHash, "recovery");
+    await recordAttempt(userKeyHash, "recovery");
+    // One generic message: don't reveal which of the three inputs was wrong.
+    return { error: "Wrong username, recovery code, or authenticator code." };
+  };
+
+  const user = await getUserByUsername(username);
+  if (!user) return fail();
+  if (!recoveryHashMatches(user.recoveryAuthHash, sha256hex(payload.recoveryAuthKey))) {
+    return fail();
+  }
+  if (!verifyTotp(decryptSecret(user.totpSecretEnc), payload.totpCode)) return fail();
+
+  await clearAttempts(ipHash, "recovery");
+  await clearAttempts(userKeyHash, "recovery");
+  await createSession(user.id, user.email);
+  return { ok: true, wrappedKeyRecovery: user.wrappedKeyRecovery };
+}
+
+// ---------------------------------------------------------------------------
+// Add a passkey to an existing (logged-in) account.
+// ---------------------------------------------------------------------------
+
+export async function addPasskeyBegin(): Promise<{ error?: string; optionsJSON?: unknown }> {
+  const session = await getSession();
+  if (!session) return { error: "Not signed in." };
+  const existing = await getCredentialsForUser(session.userId);
+  const options = await registrationOptions(session.username, existing);
+  await setCeremony({ kind: "add-passkey", challenge: options.challenge, userId: session.userId });
+  return { optionsJSON: options };
+}
+
+export async function addPasskeyComplete(payload: {
+  attestation: unknown;
+  prfCapable: boolean;
+  wrappedKeyPrf: string | null;
+  nickname?: string;
+}): Promise<{ error?: string; ok?: boolean }> {
+  const session = await getSession();
+  if (!session) return { error: "Not signed in." };
+  const ceremony = await takeCeremony("add-passkey");
+  if (!ceremony || ceremony.userId !== session.userId) {
+    return { error: "Ceremony expired — try again." };
+  }
+  const cred = await verifyRegistration(
+    payload.attestation as RegistrationResponseJSON,
+    ceremony.challenge
+  );
+  if (!cred) return { error: "Passkey could not be verified." };
+  await addCredential({
+    id: cred.id,
+    userId: session.userId,
+    publicKey: cred.publicKey,
+    counter: cred.counter,
+    transports: cred.transports,
+    prfCapable: payload.prfCapable,
+    wrappedKeyPrf: payload.wrappedKeyPrf,
+    nickname: payload.nickname?.slice(0, 60),
+  });
+  return { ok: true };
+}
+
+// Wrapped key material for the signed-in user, so a fresh tab (session cookie
+// valid, but sessionStorage empty) can re-unlock the mail key locally — via a
+// passkey PRF tap or the recovery words. Blobs only; nothing here decrypts mail.
+export async function getWrappedKeys(): Promise<{
+  error?: string;
+  wrappedKeyRecovery?: string;
+  credentials?: { id: string; wrappedKeyPrf: string | null }[];
+}> {
+  const session = await getSession();
+  if (!session) return { error: "Not signed in." };
+  const creds = await getCredentialsForUser(session.userId);
+  return {
+    wrappedKeyRecovery: session.user.wrappedKeyRecovery,
+    credentials: creds.map((c) => ({ id: c.id, wrappedKeyPrf: c.wrappedKeyPrf })),
+  };
+}
+
+// Self-heal: store a PRF-wrapped mail key for a credential the user just used.
+// Authenticators commonly reveal PRF output only during `get()`, so the first
+// login (not registration) is when this wrap becomes possible.
+export async function setPrfWrap(payload: {
+  credentialId: string;
+  wrappedKeyPrf: string;
+}): Promise<{ error?: string; ok?: boolean }> {
+  const session = await getSession();
+  if (!session) return { error: "Not signed in." };
+  const cred = await getCredential(payload.credentialId);
+  if (!cred || cred.userId !== session.userId) return { error: "Unknown credential." };
+  if (!payload.wrappedKeyPrf || payload.wrappedKeyPrf.length > 16384) {
+    return { error: "Malformed key blob." };
+  }
+  await setCredentialPrfWrap(cred.id, session.userId, payload.wrappedKeyPrf);
+  return { ok: true };
 }
 
 export async function logoutAction(): Promise<void> {

@@ -1,9 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getSession } from "@/lib/session";
-import { logoutAction } from "../actions";
-import { SecondaryButton } from "@/components/ui/secondary-button";
-import { MIcon } from "@/components/ui/material-icon";
+import SignOut from "../ui/SignOut";
 
 export default async function MailLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
@@ -49,6 +47,12 @@ export default async function MailLayout({ children }: { children: React.ReactNo
           </div>
         </header>
         {children}
+        <div style={{ marginTop: "2rem", textAlign: "center", display: "flex", flexDirection: "column", gap: "1rem", alignItems: "center" }}>
+          <span style={{ color: "#878787", fontSize: "13px" }}>
+            Logged in as {session.email} · <Link href="/mail/settings">settings</Link>
+          </span>
+          <SignOut />
+        </div>
       </div>
     </main>
   );

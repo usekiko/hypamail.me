@@ -24,7 +24,7 @@ export default async function Inbox() {
   let mail: MailSummary[] = [];
   let error: string | null = null;
   try {
-    mail = await listInbox(session.email, session.password, session.accountId);
+    mail = await listInbox(session.email, session.mailPassword, session.accountId);
   } catch {
     error = "Couldn't load your inbox. Try signing in again.";
   }
@@ -100,11 +100,10 @@ export default async function Inbox() {
                     <Link href={`/mail/${m.id}`}>{sender(m)}</Link>
                   </td>
                   <td style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {/* No preview snippet: bodies are encrypted at rest, so the
+                        server has nothing to preview. Subject/sender stay visible. */}
                     <Link href={`/mail/${m.id}`}>
-                      <span style={{ fontWeight: m.unread ? 600 : 400 }}>
-                        {m.subject || "(no subject)"}
-                      </span>
-                      <span style={{ color: "var(--muted-foreground)", marginLeft: 8 }}>{m.preview}</span>
+                      <span style={{ fontWeight: m.unread ? 700 : 400 }}>{m.subject || "(no subject)"}</span>
                     </Link>
                   </td>
                   <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>

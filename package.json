@@ -9,20 +9,26 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@scure/bip39": "^2.2.0",
+    "@simplewebauthn/server": "^13.3.2",
+    "dompurify": "^3.4.12",
     "jose": "^5.9.6",
     "next": "16.2.9",
+    "openpgp": "^6.3.1",
+    "otpauth": "^9.5.1",
     "pg": "^8.13.1",
+    "postal-mime": "^2.7.5",
+    "qrcode": "^1.5.4",
     "react": "19.2.0",
-    "react-dom": "19.2.0",
-    "sanitize-html": "^2.14.0"
+    "react-dom": "19.2.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.0.0",
     "@types/node": "^22.10.2",
     "@types/pg": "^8.11.10",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
-    "@types/sanitize-html": "^2.13.0",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.7.2"
   }

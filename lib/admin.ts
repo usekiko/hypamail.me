@@ -1,12 +1,14 @@
-// Server-side admin operations: provision new mailbox accounts (with a disk
-// quota) via Stalwart's management JMAP, and verify Cloudflare Turnstile tokens.
-import { jmap, basicAuth } from "./jmap";
+// Server-side admin operations against Stalwart's management JMAP (v0.16
+// registry API): provision mailbox accounts with a disk quota, enable
+// per-account encryption-at-rest, and verify Cloudflare Turnstile tokens.
+import { jmap, basicAuth, authenticate } from "./jmap";
 import { randomBytes } from "crypto";
 
 const JMAP_URL = process.env.JMAP_URL || "http://127.0.0.1:8088";
 
-// Strong, readable password (ambiguous chars removed). ~16 chars easily clears
-// Stalwart's minimum strength requirement.
+// Strong, readable internal credential (ambiguous chars removed). Never shown
+// to a human — it authenticates the webmail to Stalwart and only ever unlocks
+// ciphertext. ~16 chars easily clears Stalwart's minimum strength requirement.
 export function generatePassword(len = 16): string {
   const chars = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   // Rejection sampling: discard bytes in the biased tail so every char is equally
@@ -22,6 +24,7 @@ export function generatePassword(len = 16): string {
   }
   return out;
 }
+
 const USING_ADMIN = ["urn:ietf:params:jmap:core", "urn:stalwart:jmap"];
 const QUOTA_KEY = "maxDiskQuota";
 
@@ -32,16 +35,9 @@ function adminAuth(): string {
   return basicAuth(user, pass);
 }
 
-async function mgmtAccount(auth: string): Promise<string> {
-  const res = await fetch(`${JMAP_URL}/jmap/session`, { headers: { Authorization: auth } });
-  if (!res.ok) throw new Error(`session failed: ${res.status}`);
-  const s = await res.json();
-  return s.primaryAccounts["urn:stalwart:jmap"];
-}
-
-async function domainId(auth: string, acct: string): Promise<string> {
+async function domainId(auth: string): Promise<string> {
   const [r] = await jmap(auth, USING_ADMIN, [
-    ["x:Domain/get", { accountId: acct, ids: null, properties: ["name"] }, "0"],
+    ["x:Domain/get", { ids: null, properties: ["name"] }, "0"],
   ]);
   const list = (r[1].list as Array<{ id: string; name: string }>) || [];
   const d = list.find((x) => x.name === process.env.MAIL_DOMAIN);
@@ -62,27 +58,29 @@ export function validateUsername(username: string): string | null {
   return null;
 }
 
-export async function usernameTaken(username: string): Promise<boolean> {
+// Registry id of the account with this username, or null.
+async function accountRegistryId(username: string): Promise<string | null> {
   const auth = adminAuth();
-  const acct = await mgmtAccount(auth);
   const [r] = await jmap(auth, USING_ADMIN, [
-    ["x:Account/get", { accountId: acct, ids: null, properties: ["name", "emailAddress"] }, "0"],
+    ["x:Account/get", { ids: null, properties: ["name"] }, "0"],
   ]);
-  const list = (r[1].list as Array<{ name: string; emailAddress?: string }>) || [];
-  const target = `${username}@${process.env.MAIL_DOMAIN}`;
-  return list.some((a) => a.name === username || a.emailAddress === target);
+  const list = (r[1].list as Array<{ id: string; name: string }>) || [];
+  return list.find((a) => a.name === username)?.id ?? null;
 }
 
-export async function provisionAccount(username: string, password: string): Promise<void> {
+export async function usernameTaken(username: string): Promise<boolean> {
+  return (await accountRegistryId(username)) !== null;
+}
+
+// Create the Stalwart account and return its JMAP *mail* account id.
+export async function provisionAccount(username: string, password: string): Promise<string> {
   const auth = adminAuth();
-  const acct = await mgmtAccount(auth);
-  const did = await domainId(auth, acct);
+  const did = await domainId(auth);
   const quota = parseInt(process.env.ACCOUNT_QUOTA_BYTES || "1073741824", 10);
   const [r] = await jmap(auth, USING_ADMIN, [
     [
       "x:Account/set",
       {
-        accountId: acct,
         create: {
           a: {
             "@type": "User",
@@ -97,8 +95,55 @@ export async function provisionAccount(username: string, password: string): Prom
       "0",
     ],
   ]);
-  const res = r[1] as { created?: unknown; notCreated?: unknown };
-  if (!res.created) throw new Error("provision failed: " + JSON.stringify(res.notCreated));
+  const res = r[1] as { created?: Record<string, unknown>; notCreated?: unknown };
+  if (!res.created?.a) throw new Error("provision failed: " + JSON.stringify(res.notCreated));
+
+  const email = `${username}@${process.env.MAIL_DOMAIN}`;
+  const accountId = await authenticate(email, password);
+  if (!accountId) throw new Error("provisioned account failed to authenticate");
+  return accountId;
+}
+
+export async function deleteAccount(username: string): Promise<void> {
+  const id = await accountRegistryId(username);
+  if (!id) return;
+  await jmap(adminAuth(), USING_ADMIN, [["x:Account/set", { destroy: [id] }, "0"]]);
+}
+
+// Upload the user's PGP public key and switch the account to encryption-at-rest.
+// Runs with the *user's own* credentials (self-service permissions). From this
+// point every message Stalwart stores for this account — SMTP deliveries and
+// client appends alike — is PGP ciphertext only the browser can open.
+export async function uploadEncryptionKey(
+  email: string,
+  password: string,
+  armoredPublicKey: string
+): Promise<void> {
+  const auth = basicAuth(email, password);
+  const [keyRes] = await jmap(auth, USING_ADMIN, [
+    ["x:PublicKey/set", { create: { k: { key: armoredPublicKey, description: "webmail key" } } }, "0"],
+  ]);
+  const created = keyRes[1] as { created?: Record<string, { id: string }>; notCreated?: unknown };
+  const keyId = created.created?.k?.id;
+  if (!keyId) throw new Error("public key upload failed: " + JSON.stringify(created.notCreated));
+
+  const [setRes] = await jmap(auth, USING_ADMIN, [
+    [
+      "x:AccountSettings/set",
+      {
+        update: {
+          singleton: {
+            encryptionAtRest: { "@type": "Aes256", publicKey: keyId, encryptOnAppend: true },
+          },
+        },
+      },
+      "0",
+    ],
+  ]);
+  const updated = setRes[1] as { updated?: Record<string, unknown> };
+  if (!updated.updated || !("singleton" in updated.updated)) {
+    throw new Error("enabling encryption-at-rest failed");
+  }
 }
 
 export async function verifyTurnstile(token: string, ip?: string): Promise<boolean> {

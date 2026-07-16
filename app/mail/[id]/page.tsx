@@ -1,54 +1,29 @@
 import { notFound } from "next/navigation";
-import sanitizeHtml from "sanitize-html";
 import { getSession } from "@/lib/session";
-import { getEmail, markSeen } from "@/lib/jmap";
+import { getEmailMeta, markSeen } from "@/lib/jmap";
 import { deleteEmailAction } from "../actions";
-import { SecondaryButton } from "@/components/ui/secondary-button";
-import { SecondaryLink } from "@/components/ui/link-button";
-import { AlertMessage } from "@/components/ui/alert-message";
-import { MIcon } from "@/components/ui/material-icon";
+import MessageBody from "../MessageBody";
 
 export const dynamic = "force-dynamic";
 
-// Security-first email rendering. We use a strict *allowlist* of text-formatting
-// tags only — so <img>, <script>, <style>, <iframe>, <object>, <svg>, <form>,
-// event handlers, inline styles, and data:/javascript: URLs are all discarded.
-// That means no remote tracking pixels, no JavaScript, no embedded/remote
-// content of any kind can ride in on an email. Links open in a new tab with no
-// referrer. The page CSP (img-src 'none', script-src nonce-only) backs this up.
-function clean(html: string): string {
-  return sanitizeHtml(html, {
-    allowedTags: [
-      "a", "b", "i", "em", "strong", "u", "p", "br", "ul", "ol", "li",
-      "blockquote", "pre", "code", "span", "div", "h1", "h2", "h3", "h4",
-      "h5", "h6", "hr", "table", "thead", "tbody", "tr", "td", "th",
-    ],
-    allowedAttributes: { a: ["href"] },
-    allowedSchemes: ["http", "https", "mailto"],
-    allowProtocolRelative: false,
-    disallowedTagsMode: "discard",
-    transformTags: {
-      a: (tagName, attribs) => ({
-        tagName,
-        attribs: { ...attribs, target: "_blank", rel: "noopener noreferrer nofollow" },
-      }),
-    },
-  });
-}
-
+// Zero-access rendering: the server only ever sees the cleartext headers
+// (sender, subject, date — Stalwart keeps those for the list view). The body
+// is PGP ciphertext, streamed to <MessageBody /> and decrypted in the browser
+// with a key the server never holds. Sanitization (strict text-only allowlist,
+// no images/scripts/remote content) happens client-side in lib/client/mail.ts,
+// backed by the page CSP.
 export default async function ReadPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = (await getSession())!;
-  const mail = await getEmail(session.email, session.password, session.accountId, id);
+  const mail = await getEmailMeta(session.email, session.mailPassword, session.accountId, id);
   if (!mail) notFound();
   if (mail.unread) {
     try {
-      await markSeen(session.email, session.password, session.accountId, id);
+      await markSeen(session.email, session.mailPassword, session.accountId, id);
     } catch {}
   }
 
   const from = mail.from[0];
-  const cleanHtml = mail.html ? clean(mail.html) : null;
 
   return (
     <article>
@@ -84,19 +59,13 @@ export default async function ReadPage({ params }: { params: Promise<{ id: strin
       </div>
 
       <div className="panel" style={{ padding: "16px", lineHeight: 1.6, overflowWrap: "anywhere" }}>
-        {cleanHtml ? (
-          <div dangerouslySetInnerHTML={{ __html: cleanHtml }} />
-        ) : (
-          <pre style={{ whiteSpace: "pre-wrap", margin: 0, fontFamily: "inherit" }}>
-            {mail.text || mail.preview}
-          </pre>
-        )}
+        <MessageBody emailId={mail.id} />
       </div>
-      <p style={{ color: "var(--muted-foreground)", fontSize: "12px", marginTop: "8px", display: "flex", alignItems: "flex-start", gap: "6px" }}>
-        <MIcon name="lock" size={14} style={{ marginTop: "2px" }} />
-        <span>Images, scripts, and all remote content are stripped from every email.
-        This blocks tracking pixels and malicious code. It&apos;s a security feature,
-        so messages may look plainer than in other mail apps.</span>
+      <p style={{ color: "#878787", fontSize: "12px", marginTop: "8px", display: "flex", alignItems: "flex-start", gap: "6px" }}>
+        <span className="icon" style={{ fontSize: "16px", marginTop: "2px" }}>lock</span>
+        <span>This message is stored encrypted — it was decrypted just now, on your device.
+        Images, scripts, and all remote content are stripped, which blocks tracking pixels
+        and malicious code. Messages may look plainer than in other mail apps.</span>
       </p>
     </article>
   );
