@@ -462,19 +462,24 @@ export async function recoveryLogin(payload: {
     return { error: "Too many attempts. Please wait a few minutes and try again." };
   }
 
-  const fail = async () => {
+  // Every failure charges the IP. The per-username bucket is charged only once
+  // the recovery code itself checked out, so knowing a username isn't enough to
+  // lock that account out of recovery — while a leaked recovery code still
+  // leaves the 6-digit authenticator code throttled, which is what that bucket
+  // is actually for.
+  const fail = async (chargeUser: boolean) => {
     await recordAttempt(ipHash, "recovery");
-    await recordAttempt(userKeyHash, "recovery");
+    if (chargeUser) await recordAttempt(userKeyHash, "recovery");
     // One generic message: don't reveal which of the three inputs was wrong.
     return { error: "Wrong username, recovery code, or authenticator code." };
   };
 
   const user = await getUserByUsername(username);
-  if (!user) return fail();
+  if (!user) return fail(false);
   if (!recoveryHashMatches(user.recoveryAuthHash, sha256hex(payload.recoveryAuthKey))) {
-    return fail();
+    return fail(false);
   }
-  if (!verifyTotp(decryptSecret(user.totpSecretEnc), payload.totpCode)) return fail();
+  if (!verifyTotp(decryptSecret(user.totpSecretEnc), payload.totpCode)) return fail(true);
 
   await clearAttempts(ipHash, "recovery");
   await clearAttempts(userKeyHash, "recovery");
