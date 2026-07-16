@@ -90,13 +90,18 @@ export async function destroySession(): Promise<void> {
 // ---------- ceremony cookies (WebAuthn challenges & signup state) ----------
 
 export interface CeremonyData extends JWTPayload {
-  kind: "signup" | "login" | "login-totp" | "recovery" | "add-passkey";
+  kind: "signup" | "login" | "login-totp" | "recovery" | "add-passkey" | "legacy";
   challenge: string;
   username?: string;
   invite?: string;
   totpSecret?: string; // base32, pending user confirmation during signup
   userId?: string;
   credentialId?: string; // the passkey already verified, carried into the TOTP step
+  // Legacy migration only: the password the user just proved, carried to the
+  // complete step so encryption can be enabled with their own credentials before
+  // the account is rotated to an internal one. Same exposure as the password-era
+  // session rows (enc_password), but JWE-encrypted, httpOnly and 15-minute.
+  legacyPassword?: string;
 }
 
 export async function setCeremony(data: CeremonyData): Promise<void> {

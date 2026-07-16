@@ -104,6 +104,26 @@ export async function provisionAccount(username: string, password: string): Prom
   return accountId;
 }
 
+// Replace an account's password (registry API, same credential shape as
+// provisionAccount). Used once per legacy migration: the user proved they hold
+// the old password, and from here the mailbox is owned by a random internal
+// credential that only ever unlocks ciphertext — the password era ends here.
+export async function rotateAccountPassword(username: string, password: string): Promise<void> {
+  const id = await accountRegistryId(username);
+  if (!id) throw new Error("account not found");
+  const [r] = await jmap(adminAuth(), USING_ADMIN, [
+    [
+      "x:Account/set",
+      { update: { [id]: { credentials: { "0": { "@type": "Password", secret: password } } } } },
+      "0",
+    ],
+  ]);
+  const res = r[1] as { updated?: Record<string, unknown>; notUpdated?: unknown };
+  if (!res.updated || !(id in res.updated)) {
+    throw new Error("password rotation failed: " + JSON.stringify(res.notUpdated));
+  }
+}
+
 export async function deleteAccount(username: string): Promise<void> {
   const id = await accountRegistryId(username);
   if (!id) return;

@@ -4,15 +4,18 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { createHash, randomBytes } from "crypto";
 import { inviteRequired } from "@/constants/invite";
+import { authenticate } from "@/lib/jmap";
 import {
   provisionAccount,
   deleteAccount,
+  rotateAccountPassword,
   uploadEncryptionKey,
   validateUsername,
   usernameTaken,
   verifyTurnstile,
   generatePassword,
 } from "@/lib/admin";
+import { legacyLoginAvailable, LEGACY_LOGIN_LABEL } from "@/constants/legacy";
 import {
   registrationOptions,
   verifyRegistration,
@@ -75,6 +78,9 @@ const MANAGE_WINDOW = 600;
 // Username-first sign-in lookups (see loginBeginForDevice).
 const LOGIN_LOOKUP_MAX = 12;
 const LOGIN_LOOKUP_WINDOW = 600;
+// Legacy migration password checks — the budget the old password login had.
+const LEGACY_MAX = 8;
+const LEGACY_WINDOW = 600;
 
 // Real client IP. We trust ONLY Cloudflare's CF-Connecting-IP, which Cloudflare
 // sets authoritatively and a client cannot override. We deliberately do NOT fall
@@ -485,6 +491,184 @@ export async function recoveryLogin(payload: {
   await clearAttempts(userKeyHash, "recovery");
   await createSession(user.id, user.email);
   return { ok: true, wrappedKeyRecovery: user.wrappedKeyRecovery };
+}
+
+// ---------------------------------------------------------------------------
+// Legacy migration (/login/legacy) — password-era accounts move to a passkey.
+//
+// These accounts exist only in Stalwart (username + password, plaintext
+// mailbox); they have no users row, no passkey, and no encryption, so after
+// this deploy they can't sign in at all. Until LEGACY_LOGIN_UNTIL they can
+// prove the old password once and walk the same wizard as signup: passkey →
+// recovery words → TOTP. Completing it enables encryption-at-rest, rotates the
+// mailbox to a random internal credential (the old password dies), and creates
+// the users row. Messages already in the mailbox stay readable (stored
+// plaintext, and the client renders pre-encryption mail as plain MIME); new
+// mail is ciphertext from the moment encryption is enabled.
+// ---------------------------------------------------------------------------
+
+export async function legacyLoginBegin(payload: {
+  username: string;
+  password: string;
+}): Promise<SignupBeginResult> {
+  if (!legacyLoginAvailable()) {
+    return { error: `Password sign-in ended on ${LEGACY_LOGIN_LABEL} — see /login/legacy for what to do.` };
+  }
+  // Accept "user" or "user@domain", like the old password form did.
+  const username = String(payload.username || "").trim().toLowerCase().split("@")[0];
+  const password = String(payload.password || "");
+  if (!username || !password) return { error: "Enter your username and password." };
+  const email = `${username}@${DOMAIN}`;
+
+  const ipHash = await clientIpHash();
+  if (await isRateLimited(ipHash, "legacy", LEGACY_MAX, LEGACY_WINDOW)) {
+    return { error: "Too many attempts. Please wait a few minutes and try again." };
+  }
+
+  // Already migrated → the passkey flow owns this account now. Checked before
+  // the password so a migrated user with a saved password gets pointed the
+  // right way instead of a confusing "wrong password".
+  if (await usernameExists(username)) {
+    return { error: "This account already moved to passkeys — use the normal sign-in." };
+  }
+
+  let accountId: string | null;
+  try {
+    accountId = await authenticate(email, password);
+  } catch {
+    return { error: "Server error. Please try again." };
+  }
+  if (!accountId) {
+    await recordAttempt(ipHash, "legacy");
+    return { error: "Wrong username or password." };
+  }
+  await clearAttempts(ipHash, "legacy");
+
+  const options = await registrationOptions(username);
+  const totpSecret = generateTotpSecret();
+  await setCeremony({
+    kind: "legacy",
+    challenge: options.challenge,
+    username,
+    totpSecret,
+    legacyPassword: password,
+  });
+  return {
+    optionsJSON: options,
+    totpUri: totpUri(totpSecret, email),
+    totpSecret,
+    email,
+  };
+}
+
+export async function legacyMigrateComplete(payload: {
+  attestation: unknown;
+  prfCapable: boolean;
+  wrappedKeyPrf: string | null;
+  wrappedKeyRecovery: string;
+  recoveryAuthKey: string;
+  pgpPublicKey: string;
+  totpCode: string;
+}): Promise<SignupCompleteResult> {
+  const ceremony = await takeCeremony("legacy");
+  if (!ceremony?.username || !ceremony.totpSecret || !ceremony.legacyPassword) {
+    return { error: "Migration session expired — please start over.", fatal: true };
+  }
+  if (!legacyLoginAvailable()) {
+    return { error: "The migration window has closed.", fatal: true };
+  }
+  const { username, totpSecret, legacyPassword } = ceremony;
+  const email = `${username}@${DOMAIN}`;
+
+  const ipHash = await clientIpHash();
+  if (await isRateLimited(ipHash, "legacy", LEGACY_MAX, LEGACY_WINDOW)) {
+    return { error: "Too many attempts. Please wait a few minutes.", fatal: true };
+  }
+
+  if (
+    !payload.pgpPublicKey?.includes("BEGIN PGP PUBLIC KEY BLOCK") ||
+    !payload.wrappedKeyRecovery ||
+    !payload.recoveryAuthKey
+  ) {
+    return { error: "Malformed migration payload.", fatal: true };
+  }
+
+  // Ceremony consumed above → single-use, same anti-brute-force property as
+  // signupComplete: a wrong code restarts the wizard (and re-proves the password).
+  if (!verifyTotp(totpSecret, payload.totpCode)) {
+    await recordAttempt(ipHash, "legacy");
+    return { error: "Wrong authenticator code — migration restarted for safety.", fatal: true };
+  }
+
+  const cred = await verifyRegistration(
+    payload.attestation as RegistrationResponseJSON,
+    ceremony.challenge
+  );
+  if (!cred) {
+    await recordAttempt(ipHash, "legacy");
+    return { error: "Passkey could not be verified — please start over.", fatal: true };
+  }
+
+  // Double-submit / parallel-tab race: someone finished this migration already.
+  if (await usernameExists(username)) {
+    return { error: "This account already moved to passkeys — use the normal sign-in.", fatal: true };
+  }
+
+  // Ordered so every failure before the rotation leaves the account exactly as
+  // it was (old password valid, wizard restartable). Enabling encryption runs
+  // with the user's own just-proven credentials; a retry after a partial
+  // failure only uploads another key, which is harmless.
+  try {
+    await uploadEncryptionKey(email, legacyPassword, payload.pgpPublicKey);
+  } catch {
+    return { error: "Could not enable mailbox encryption. Please try again.", fatal: true };
+  }
+
+  // Point of no return: from here the old password is gone. Failures between
+  // the rotation and the users insert would strand the account (encrypted,
+  // internal credential, no users row) — kept to two DB writes on purpose;
+  // recovery from that would be an admin re-rotating the password.
+  const mailPassword = generatePassword();
+  try {
+    await rotateAccountPassword(username, mailPassword);
+  } catch {
+    return { error: "Could not secure the mailbox. Please try again.", fatal: true };
+  }
+
+  let accountId: string | null;
+  try {
+    accountId = await authenticate(email, mailPassword);
+  } catch {
+    accountId = null;
+  }
+  if (!accountId) {
+    return { error: "Could not verify the migrated mailbox. Please contact us.", fatal: true };
+  }
+
+  const userId = await createUser({
+    username,
+    email,
+    accountId,
+    encMailPassword: encryptSecret(mailPassword),
+    pgpPublicKey: payload.pgpPublicKey,
+    wrappedKeyRecovery: payload.wrappedKeyRecovery,
+    recoveryAuthHash: sha256hex(payload.recoveryAuthKey),
+    totpSecretEnc: encryptSecret(totpSecret),
+  });
+  await addCredential({
+    id: cred.id,
+    userId,
+    publicKey: cred.publicKey,
+    counter: cred.counter,
+    transports: cred.transports,
+    prfCapable: payload.prfCapable,
+    wrappedKeyPrf: payload.wrappedKeyPrf,
+    isOriginal: true, // the migration passkey plays the signup passkey's role
+  });
+
+  await clearAttempts(ipHash, "legacy");
+  await createSession(userId, email);
+  return { ok: true };
 }
 
 // ---------------------------------------------------------------------------
