@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
 import { ShineLink, SecondaryLink } from "@/components/ui/link-button";
 import { MIcon } from "@/components/ui/material-icon";
-import { Navbar } from "@/components/navbar";
+import { Navbar, PAGE_WIDTH } from "@/components/navbar";
 
 const DISPLAY_FONT = "'SF Pro Display', var(--font-inter), Inter, sans-serif";
 const DOMAIN = process.env.NEXT_PUBLIC_MAIL_DOMAIN || "hypamail.me";
@@ -67,15 +67,15 @@ export default async function Home() {
     <div className="min-h-screen bg-[#151515]">
       <Navbar />
 
-      <main className="mx-auto max-w-[880px] px-6">
+      <main className={`mx-auto ${PAGE_WIDTH} px-6`}>
         <section className="pt-32 pb-20 lg:pt-40 lg:pb-24">
           <h1
-            className="max-w-[760px] text-[clamp(34px,6vw,56px)] leading-[1.05] tracking-tight text-[#f7f8f8]"
+            className="max-w-[880px] text-[clamp(36px,6vw,64px)] leading-[1.05] tracking-tight text-[#f7f8f8]"
             style={{ fontFamily: DISPLAY_FONT }}
           >
             Your own private inbox
           </h1>
-          <p className="mt-5 max-w-[560px] text-[16px] leading-relaxed text-[#898e97]">
+          <p className="mt-5 max-w-[620px] text-[16px] leading-relaxed text-[#898e97]">
             A clean email address on {DOMAIN}. Pick a username, get an inbox, and read it from
             anywhere, without the sender learning when you opened it, where you were, or what
             you clicked.
@@ -176,7 +176,7 @@ export default async function Home() {
       </main>
 
       <footer>
-        <div className="mx-auto flex max-w-[880px] flex-wrap items-center justify-between gap-3 px-6 py-8 text-[12px] text-[#898e97]">
+        <div className={`mx-auto flex ${PAGE_WIDTH} flex-wrap items-center justify-between gap-3 px-6 py-8 text-[12px] text-[#898e97]`}>
           <span>{DOMAIN}</span>
           <span>Early access, invite-only.</span>
         </div>
