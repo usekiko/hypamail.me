@@ -19,6 +19,7 @@ import {
   storeMailKey,
 } from "@/lib/client/crypto";
 import PasskeyHelp from "../ui/PasskeyHelp";
+import FirefoxNote from "../ui/FirefoxNote";
 import RecoveryWordsInput from "../ui/RecoveryWordsInput";
 
 type Phase = "idle" | "totp" | "words";
@@ -224,6 +225,7 @@ export default function LoginPage() {
               {busy ? "Waiting for your device…" : "Sign in with passkey"}
             </button>
             {error && <div style={{ color: "#e06a6a", fontSize: "13px", marginTop: "0.75rem" }}>{error}</div>}
+            <FirefoxNote />
 
             {showDevice ? (
               <form onSubmit={onDevice} style={{ display: "flex", flexDirection: "column", gap: "0.75rem", marginTop: "1rem" }}>

@@ -14,6 +14,7 @@ import { useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
 import Turnstile from "../ui/Turnstile";
 import PasskeyHelp from "../ui/PasskeyHelp";
+import FirefoxNote from "../ui/FirefoxNote";
 import {
   signupBegin,
   signupComplete,
@@ -237,6 +238,7 @@ export default function SignupPage() {
           {busy ? "Waiting for your device…" : "Create passkey"}
         </button>
         <Err msg={error} />
+        <FirefoxNote />
         <PasskeyHelp />
       </Shell>
     );
