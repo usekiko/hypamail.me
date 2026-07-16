@@ -9,10 +9,10 @@
 // mail keypair and wrapped its private key; the server only ever receives
 // wrapped blobs and the public key.
 import Link from "next/link";
-import Script from "next/script";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
+import Turnstile from "../ui/Turnstile";
 import {
   signupBegin,
   signupComplete,
@@ -288,7 +288,6 @@ export default function SignupPage() {
 
   return (
     <Shell>
-      <Script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer />
       <h1 style={{ fontSize: "1.75rem", fontWeight: 600, margin: "0 0 0.5rem" }}>Register</h1>
       <p style={{ color: "#878787", fontSize: "13px", margin: "0 0 1.75rem" }}>
         invite-only — no password, you&apos;ll sign in with a passkey
@@ -308,7 +307,7 @@ export default function SignupPage() {
           <input className="inpt" name="invite" placeholder="Invite code" autoComplete="off" required />
         </div>
         {SITE_KEY ? (
-          <div className="cf-turnstile" data-sitekey={SITE_KEY} data-theme="dark" />
+          <Turnstile siteKey={SITE_KEY} />
         ) : (
           <div style={{ color: "#878787", fontSize: "12px" }}>(Turnstile not configured)</div>
         )}
