@@ -19,6 +19,7 @@ import {
   recordAttempt,
   clearAttempts,
 } from "@/lib/db";
+import { inviteRequired } from "@/constants/invite";
 
 const DOMAIN = process.env.MAIL_DOMAIN || "hypamail.me";
 
@@ -89,7 +90,10 @@ export async function signupAction(_prev: FormState, formData: FormData): Promis
 
   const vErr = validateUsername(username);
   if (vErr) return { error: vErr };
-  if (!invite) return { error: "An invite code is required." };
+  // During the open-signup window we ignore invite codes entirely rather than
+  // consuming any that are sent, so nobody burns a code they didn't need.
+  const needsInvite = inviteRequired();
+  if (needsInvite && !invite) return { error: "An invite code is required." };
 
   const ip = clientIp(await headers()) ?? undefined;
   if (!(await verifyTurnstile(token, ip))) {
@@ -105,7 +109,7 @@ export async function signupAction(_prev: FormState, formData: FormData): Promis
   // Password is generated for the user, never chosen.
   const password = generatePassword();
   const email = `${username}@${DOMAIN}`;
-  if (!(await consumeInviteCode(invite, email))) {
+  if (needsInvite && !(await consumeInviteCode(invite, email))) {
     await recordAttempt(ipHash, "signup");
     return { error: "Invalid or already-used invite code." };
   }
@@ -113,7 +117,7 @@ export async function signupAction(_prev: FormState, formData: FormData): Promis
   try {
     await provisionAccount(username, password);
   } catch {
-    await releaseInviteCode(invite);
+    if (needsInvite) await releaseInviteCode(invite);
     // Most likely cause is a concurrent signup that claimed the same username
     // between our check and the create — surface that precisely.
     if (await usernameTaken(username)) return { error: "That username is already taken." };
