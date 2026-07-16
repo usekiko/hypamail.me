@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { getSession } from "@/lib/session";
 import { listInbox, type MailSummary } from "@/lib/jmap";
+import { AlertMessage } from "@/components/ui/alert-message";
+import { MIcon } from "@/components/ui/material-icon";
 
 export const dynamic = "force-dynamic";
 
@@ -27,17 +29,44 @@ export default async function Inbox() {
     error = "Couldn't load your inbox. Try signing in again.";
   }
 
+  const unread = mail.filter((m) => m.unread).length;
+
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "12px" }}>
-        <h1 style={{ fontSize: "1.1rem", margin: 0, fontWeight: 700 }}>inbox</h1>
-        <span style={{ color: "#878787", fontSize: "12px" }}>{mail.length} messages</span>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "baseline",
+          marginBottom: "12px",
+        }}
+      >
+        <h1 style={{ fontSize: "1.1rem", margin: 0, fontWeight: 600, letterSpacing: "-0.02em" }}>
+          Inbox
+        </h1>
+        <span style={{ color: "var(--muted-foreground)", fontSize: "12px" }}>
+          {mail.length} {mail.length === 1 ? "message" : "messages"}
+          {unread > 0 && ` · ${unread} unread`}
+        </span>
       </div>
 
-      {error && <div style={{ color: "#e06a6a" }}>{error}</div>}
+      {error && <AlertMessage tone="error">{error}</AlertMessage>}
+
       {!error && mail.length === 0 && (
-        <div style={{ color: "#878787", padding: "2.5rem", textAlign: "center" }}>
-          No messages yet.
+        <div
+          className="panel"
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: "0.75rem",
+            color: "var(--muted-foreground)",
+            padding: "3.5rem 2rem",
+            textAlign: "center",
+          }}
+        >
+          <MIcon name="inbox" size={32} />
+          <span>No messages yet.</span>
         </div>
       )}
 
@@ -59,24 +88,45 @@ export default async function Inbox() {
             <tbody>
               {mail.map((m) => (
                 <tr key={m.id}>
-                  <td style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: m.unread ? 700 : 400 }}>
-                    <Link href={`/mail/${m.id}`}>
-                      {sender(m)}
-                    </Link>
+                  <td
+                    style={{
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      fontWeight: m.unread ? 600 : 400,
+                      color: m.unread ? "var(--foreground)" : "var(--muted-foreground)",
+                    }}
+                  >
+                    <Link href={`/mail/${m.id}`}>{sender(m)}</Link>
                   </td>
                   <td style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     <Link href={`/mail/${m.id}`}>
-                      <span style={{ fontWeight: m.unread ? 700 : 400 }}>{m.subject || "(no subject)"}</span>
-                      <span style={{ color: "#878787" }}> — {m.preview}</span>
+                      <span style={{ fontWeight: m.unread ? 600 : 400 }}>
+                        {m.subject || "(no subject)"}
+                      </span>
+                      <span style={{ color: "var(--muted-foreground)" }}> — {m.preview}</span>
                     </Link>
                   </td>
                   <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                     {m.spam && (
-                      <span style={{ display: "inline-block", marginRight: 8, padding: "1px 6px", borderRadius: 4, background: "rgba(216,166,87,0.12)", color: "#d8a657", fontSize: "11px", fontWeight: 600, verticalAlign: "middle" }}>
-                        Probable spam
+                      <span
+                        style={{
+                          display: "inline-block",
+                          marginRight: 8,
+                          padding: "2px 8px",
+                          borderRadius: 999,
+                          border: "0.7px solid rgba(234,179,8,0.3)",
+                          background: "rgba(234,179,8,0.12)",
+                          color: "rgb(254,240,138)",
+                          fontSize: "11px",
+                          fontWeight: 500,
+                          verticalAlign: "middle",
+                        }}
+                      >
+                        Spam
                       </span>
                     )}
-                    <span style={{ color: "#878787" }}>{when(m.receivedAt)}</span>
+                    <span style={{ color: "var(--muted-foreground)" }}>{when(m.receivedAt)}</span>
                   </td>
                 </tr>
               ))}

@@ -1,9 +1,12 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import sanitizeHtml from "sanitize-html";
 import { getSession } from "@/lib/session";
 import { getEmail, markSeen } from "@/lib/jmap";
 import { deleteEmailAction } from "../actions";
+import { SecondaryButton } from "@/components/ui/secondary-button";
+import { SecondaryLink } from "@/components/ui/link-button";
+import { AlertMessage } from "@/components/ui/alert-message";
+import { MIcon } from "@/components/ui/material-icon";
 
 export const dynamic = "force-dynamic";
 
@@ -49,26 +52,31 @@ export default async function ReadPage({ params }: { params: Promise<{ id: strin
 
   return (
     <article>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "stretch", marginBottom: "12px" }}>
-        <Link href="/mail" className="btn btn-cancel" style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}><span className="icon">arrow_back</span> inbox</Link>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem", marginBottom: "12px" }}>
+        <SecondaryLink href="/mail" variant="ghost" size="sm">
+          <MIcon name="arrow_back" size={16} style={{ marginRight: 6 }} />
+          Inbox
+        </SecondaryLink>
         <form action={deleteEmailAction} style={{ display: "flex" }}>
           <input type="hidden" name="id" value={mail.id} />
-          <button className="btn btn-cancel" type="submit">delete</button>
+          <SecondaryButton type="submit" size="sm" danger>
+            <MIcon name="delete" size={16} style={{ marginRight: 6 }} />
+            Delete
+          </SecondaryButton>
         </form>
       </div>
 
       {mail.spam && (
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "9px 12px", marginBottom: "10px", borderRadius: 6, background: "rgba(216,166,87,0.12)", color: "#d8a657", fontSize: "13px" }}>
-          <span className="icon" style={{ fontSize: "18px" }}>report</span>
-          <span>Flagged as probable spam — be cautious with links, attachments, and anything asking for personal info.</span>
-        </div>
+        <AlertMessage tone="warning" icon={<MIcon name="report" size={16} style={{ marginRight: 8, marginTop: 2 }} />}>
+          Flagged as probable spam — be cautious with links, attachments, and anything asking for personal info.
+        </AlertMessage>
       )}
 
       <div className="panel" style={{ padding: "16px", marginBottom: "10px" }}>
-        <h1 style={{ fontSize: "1.15rem", margin: "0 0 0.6rem", fontWeight: 700 }}>{mail.subject || "(no subject)"}</h1>
-        <div style={{ display: "flex", justifyContent: "space-between", color: "#878787", fontSize: "13px", flexWrap: "wrap", gap: "0.5rem" }}>
+        <h1 style={{ fontSize: "1.15rem", margin: "0 0 0.6rem", fontWeight: 600, letterSpacing: "-0.02em" }}>{mail.subject || "(no subject)"}</h1>
+        <div style={{ display: "flex", justifyContent: "space-between", color: "var(--muted-foreground)", fontSize: "13px", flexWrap: "wrap", gap: "0.5rem" }}>
           <span>
-            <span style={{ color: "#fff" }}>{from ? from.name || from.email : "(unknown)"}</span>
+            <span style={{ color: "var(--foreground)", fontWeight: 500 }}>{from ? from.name || from.email : "(unknown)"}</span>
             {from?.name && <span> &lt;{from.email}&gt;</span>}
           </span>
           <span>{new Date(mail.receivedAt).toLocaleString()}</span>
@@ -84,8 +92,8 @@ export default async function ReadPage({ params }: { params: Promise<{ id: strin
           </pre>
         )}
       </div>
-      <p style={{ color: "#878787", fontSize: "12px", marginTop: "8px", display: "flex", alignItems: "flex-start", gap: "6px" }}>
-        <span className="icon" style={{ fontSize: "16px", marginTop: "2px" }}>lock</span>
+      <p style={{ color: "var(--muted-foreground)", fontSize: "12px", marginTop: "8px", display: "flex", alignItems: "flex-start", gap: "6px" }}>
+        <MIcon name="lock" size={14} style={{ marginTop: "2px" }} />
         <span>Images, scripts, and all remote content are stripped from every email —
         this blocks tracking pixels and malicious code. It&apos;s a security feature,
         so messages may look plainer than in other mail apps.</span>
