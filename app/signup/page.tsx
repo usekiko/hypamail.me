@@ -10,12 +10,14 @@ import { TextInput } from "@/components/ui/text-input";
 import { AlertMessage } from "@/components/ui/alert-message";
 import { MIcon } from "@/components/ui/material-icon";
 import { AuthColumn, AuthPanel } from "@/components/auth-panel";
+import { inviteRequired, INVITE_FREE_LABEL } from "@/constants/invite";
 
 const DOMAIN = process.env.NEXT_PUBLIC_MAIL_DOMAIN || "hypamail.me";
 const SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "";
 
 export default function SignupPage() {
   const [state, action, pending] = useActionState<FormState, FormData>(signupAction, null);
+  const needsInvite = inviteRequired();
 
   if (state?.ok) {
     return (
@@ -70,6 +72,17 @@ export default function SignupPage() {
           </>
         }
       >
+        {!needsInvite && (
+          <AlertMessage
+            tone="info"
+            icon={<MIcon name="celebration" size={16} style={{ flexShrink: 0, marginRight: 8, marginTop: 2 }} />}
+            className="mb-5"
+          >
+            Invites are open until {INVITE_FREE_LABEL}. You don&apos;t need a code, just pick a
+            username.
+          </AlertMessage>
+        )}
+
         {state?.error && <AlertMessage tone="error" className="mb-5">{state.error}</AlertMessage>}
 
         <form action={action} className="space-y-4">
@@ -94,21 +107,24 @@ export default function SignupPage() {
             />
           </div>
           <div>
-            <label className="block text-[13px] font-medium text-[#f7f8f8] mb-2 pl-1" htmlFor="invite">
-              Invite code
+            <label
+              className={`block text-[13px] font-medium mb-2 pl-1 ${needsInvite ? "text-[#f7f8f8]" : "text-[#898e97]"}`}
+              htmlFor="invite"
+            >
+              Invite code{!needsInvite && " (not needed right now)"}
             </label>
             <TextInput
               id="invite"
               name="invite"
-              disabled={pending}
-              placeholder="Invite code"
+              disabled={pending || !needsInvite}
+              placeholder={needsInvite ? "Invite code" : "Not needed until " + INVITE_FREE_LABEL}
               autoComplete="off"
               autoCapitalize="off"
               autoCorrect="off"
               spellCheck={false}
               data-lpignore="true"
               data-1p-ignore="true"
-              required
+              required={needsInvite}
               fullWidth
               leading={<MIcon name="confirmation_number" size={16} />}
             />
