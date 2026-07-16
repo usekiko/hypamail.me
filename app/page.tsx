@@ -1,8 +1,8 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
 import { ShineLink, SecondaryLink } from "@/components/ui/link-button";
 import { MIcon } from "@/components/ui/material-icon";
+import { Navbar } from "@/components/navbar";
 
 const DISPLAY_FONT = "'SF Pro Display', var(--font-inter), Inter, sans-serif";
 const DOMAIN = process.env.NEXT_PUBLIC_MAIL_DOMAIN || "hypamail.me";
@@ -37,7 +37,7 @@ const STEPS = [
   },
   {
     title: "Pick a username",
-    body: `Claim you@${DOMAIN}. A password is generated for you — save it, it's shown once.`,
+    body: `Claim you@${DOMAIN}. A password is generated for you, so save it. It's shown once.`,
   },
   {
     title: "Read your mail",
@@ -48,7 +48,7 @@ const STEPS = [
 const LIMITS = [
   {
     title: "Sending",
-    body: "Hypamail receives mail only. There's no compose window, and the server can't send — it's firewalled off, not just hidden in the UI.",
+    body: "Hypamail receives mail only. There's no compose window, and the server can't send at all. It's firewalled off, not just hidden in the UI.",
   },
   {
     title: "Attachments",
@@ -65,22 +65,10 @@ export default async function Home() {
 
   return (
     <div className="min-h-screen bg-[#151515]">
-      <header className="border-b border-[rgba(255,255,255,0.1)]">
-        <div className="mx-auto flex max-w-[980px] items-center justify-between px-6 py-5">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="https://r2.hypastack.com/cdn/fepvmb5y0u31/hypamail.webp"
-            alt="hypamail"
-            className="h-[32px] w-auto object-contain"
-          />
-          <Link href="/login" className="text-[13px] text-[#898e97] hover:text-[#f7f8f8]">
-            Sign in
-          </Link>
-        </div>
-      </header>
+      <Navbar />
 
-      <main className="mx-auto max-w-[980px] px-6">
-        <section className="border-b border-[rgba(255,255,255,0.1)] py-20 lg:py-28">
+      <main className="mx-auto max-w-[880px] px-6">
+        <section className="pt-32 pb-20 lg:pt-40 lg:pb-24">
           <h1
             className="max-w-[760px] text-[clamp(34px,6vw,56px)] leading-[1.05] tracking-tight text-[#f7f8f8]"
             style={{ fontFamily: DISPLAY_FONT }}
@@ -89,7 +77,7 @@ export default async function Home() {
           </h1>
           <p className="mt-5 max-w-[560px] text-[16px] leading-relaxed text-[#898e97]">
             A clean email address on {DOMAIN}. Pick a username, get an inbox, and read it from
-            anywhere — without the sender learning when you opened it, where you were, or what
+            anywhere, without the sender learning when you opened it, where you were, or what
             you clicked.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
@@ -98,16 +86,9 @@ export default async function Home() {
               Sign in
             </SecondaryLink>
           </div>
-          <ul className="mt-8 flex flex-wrap gap-x-6 gap-y-2 list-none p-0 text-[13px] text-[#898e97]">
-            <li>Invite-only</li>
-            <li aria-hidden="true">·</li>
-            <li>Receive-only</li>
-            <li aria-hidden="true">·</li>
-            <li>1 GiB of storage</li>
-          </ul>
         </section>
 
-        <section className="border-b border-[rgba(255,255,255,0.1)] py-16 lg:py-20">
+        <section className="py-16 lg:py-20">
           <h2
             className="text-[13px] uppercase tracking-widest text-[#898e97]"
             style={{ fontFamily: DISPLAY_FONT }}
@@ -133,7 +114,7 @@ export default async function Home() {
           </div>
         </section>
 
-        <section className="border-b border-[rgba(255,255,255,0.1)] py-16 lg:py-20">
+        <section className="py-16 lg:py-20">
           <h2
             className="text-[13px] uppercase tracking-widest text-[#898e97]"
             style={{ fontFamily: DISPLAY_FONT }}
@@ -156,19 +137,16 @@ export default async function Home() {
           </ol>
         </section>
 
-        <section className="border-b border-[rgba(255,255,255,0.1)] py-16 lg:py-20">
+        <section className="py-16 lg:py-20">
           <h2
             className="text-[13px] uppercase tracking-widest text-[#898e97]"
             style={{ fontFamily: DISPLAY_FONT }}
           >
             What it doesn&apos;t do
           </h2>
-          <dl className="mt-8 flex flex-col">
+          <dl className="mt-8 flex flex-col gap-6">
             {LIMITS.map((l) => (
-              <div
-                key={l.title}
-                className="flex flex-col gap-1 border-t border-[rgba(255,255,255,0.06)] py-4 first:border-t-0 first:pt-0 sm:flex-row sm:gap-8"
-              >
+              <div key={l.title} className="flex flex-col gap-1 sm:flex-row sm:gap-8">
                 <dt
                   className="w-[160px] shrink-0 text-[14px] tracking-tight text-[#f7f8f8]"
                   style={{ fontFamily: DISPLAY_FONT }}
@@ -181,7 +159,7 @@ export default async function Home() {
           </dl>
         </section>
 
-        <section className="py-16 lg:py-20">
+        <section className="py-16 lg:py-24">
           <h2
             className="text-[clamp(22px,3vw,30px)] tracking-tight text-[#f7f8f8]"
             style={{ fontFamily: DISPLAY_FONT }}
@@ -197,10 +175,10 @@ export default async function Home() {
         </section>
       </main>
 
-      <footer className="border-t border-[rgba(255,255,255,0.1)]">
-        <div className="mx-auto flex max-w-[980px] flex-wrap items-center justify-between gap-3 px-6 py-6 text-[12px] text-[#898e97]">
+      <footer>
+        <div className="mx-auto flex max-w-[880px] flex-wrap items-center justify-between gap-3 px-6 py-8 text-[12px] text-[#898e97]">
           <span>{DOMAIN}</span>
-          <span>Early access — invite-only.</span>
+          <span>Early access, invite-only.</span>
         </div>
       </footer>
     </div>
