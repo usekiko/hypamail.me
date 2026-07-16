@@ -116,6 +116,10 @@ export default function RecoveryWordsInput({
             border: `1px solid ${isBad(i) ? "#e06a6a" : "#2a2a2a"}`,
             borderRadius: 6,
             padding: "6px 8px",
+            // Grid items default to min-width:auto and won't shrink below the
+            // input's intrinsic width, which overflows the page on narrow
+            // screens. minWidth:0 lets the columns actually divide the row.
+            minWidth: 0,
           }}
         >
           <span
@@ -134,6 +138,7 @@ export default function RecoveryWordsInput({
             ref={(el) => {
               refs.current[i] = el;
             }}
+            size={1}
             value={w}
             onChange={(e) => handleChange(i, e.target.value)}
             onKeyDown={(e) => handleKeyDown(i, e)}

@@ -247,9 +247,10 @@ export default function SignupPage() {
       <Shell>
         <h1 style={{ fontSize: "1.75rem", fontWeight: 600, margin: "0 0 0.5rem" }}>Your recovery code</h1>
         <p style={{ color: "#878787", fontSize: "13px", margin: "0 0 1.25rem", lineHeight: 1.6 }}>
-          Write these 12 words down and keep them safe. They are the <b style={{ color: "#ddd" }}>only</b> way
-          back into your account if you lose your devices — and the only backup key to your mail.
-          We can&apos;t reset or recover them. They will not be shown again.
+          Write these 12 words down and keep them safe. They are the{" "}
+          <b style={{ color: "#ddd" }}>only</b>{" "}
+          way back into your account if you lose your devices — and the only backup key to your
+          mail. We can&apos;t reset or recover them. They will not be shown again.
         </p>
         <div className="panel" style={{ padding: "14px", marginBottom: "1rem", userSelect: "all" }}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "10px 16px", fontFamily: "ui-monospace, monospace", fontSize: "14px" }}>
@@ -298,8 +299,9 @@ export default function SignupPage() {
         <h1 style={{ fontSize: "1.75rem", fontWeight: 600, margin: "0 0 0.5rem" }}>Set up 2FA</h1>
         <p style={{ color: "#878787", fontSize: "13px", margin: "0 0 1.25rem", lineHeight: 1.6 }}>
           Scan this with an authenticator app (Aegis, Ente Auth, Google Authenticator…).
-          It protects account recovery: recovery needs your 12 words <b style={{ color: "#ddd" }}>and</b> a
-          code from this app. Use an authenticator with backups — losing both your passkeys and
+          It protects account recovery: recovery needs your 12 words{" "}
+          <b style={{ color: "#ddd" }}>and</b>{" "}
+          a code from this app. Use an authenticator with backups — losing both your passkeys and
           this app means the account is gone for good.
         </p>
         <div style={{ background: "#fff", borderRadius: 8, padding: 10, width: "fit-content", margin: "0 auto 1rem" }}>
