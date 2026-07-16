@@ -68,7 +68,7 @@ export default async function ReadPage({ params }: { params: Promise<{ id: strin
 
       {mail.spam && (
         <AlertMessage tone="warning" icon={<MIcon name="report" size={16} style={{ marginRight: 8, marginTop: 2 }} />}>
-          Flagged as probable spam — be cautious with links, attachments, and anything asking for personal info.
+          Flagged as probable spam. Be cautious with links, attachments, and anything asking for personal info.
         </AlertMessage>
       )}
 
@@ -94,8 +94,8 @@ export default async function ReadPage({ params }: { params: Promise<{ id: strin
       </div>
       <p style={{ color: "var(--muted-foreground)", fontSize: "12px", marginTop: "8px", display: "flex", alignItems: "flex-start", gap: "6px" }}>
         <MIcon name="lock" size={14} style={{ marginTop: "2px" }} />
-        <span>Images, scripts, and all remote content are stripped from every email —
-        this blocks tracking pixels and malicious code. It&apos;s a security feature,
+        <span>Images, scripts, and all remote content are stripped from every email.
+        This blocks tracking pixels and malicious code. It&apos;s a security feature,
         so messages may look plainer than in other mail apps.</span>
       </p>
     </article>

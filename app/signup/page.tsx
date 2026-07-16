@@ -22,7 +22,7 @@ export default function SignupPage() {
       <div className="flex min-h-screen bg-[#151515]">
         <AuthColumn
           title="Account created"
-          subtitle="Save your password somewhere safe — it won't be shown again."
+          subtitle="Save your password somewhere safe. It won't be shown again."
           footer={
             <>
               Not taken straight to your inbox?{" "}

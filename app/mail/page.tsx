@@ -104,7 +104,7 @@ export default async function Inbox() {
                       <span style={{ fontWeight: m.unread ? 600 : 400 }}>
                         {m.subject || "(no subject)"}
                       </span>
-                      <span style={{ color: "var(--muted-foreground)" }}> — {m.preview}</span>
+                      <span style={{ color: "var(--muted-foreground)", marginLeft: 8 }}>{m.preview}</span>
                     </Link>
                   </td>
                   <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
