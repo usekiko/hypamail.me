@@ -34,10 +34,12 @@ export default function LoginPage() {
               name="username"
               disabled={pending}
               placeholder="you"
-              autoComplete="username"
+              autoComplete="off"
               autoCapitalize="off"
               autoCorrect="off"
               spellCheck={false}
+              data-lpignore="true"
+              data-1p-ignore="true"
               required
               fullWidth
               leading={<MIcon name="person" size={16} />}
@@ -53,7 +55,14 @@ export default function LoginPage() {
               type="password"
               disabled={pending}
               placeholder="••••••••"
-              autoComplete="current-password"
+              // "new-password" (not "current-password") — the strongest signal
+              // Chrome honours for "do not offer a saved password here".
+              autoComplete="new-password"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
+              data-lpignore="true"
+              data-1p-ignore="true"
               required
               fullWidth
               leading={<MIcon name="key" size={16} />}

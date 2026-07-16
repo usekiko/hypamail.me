@@ -86,6 +86,8 @@ export default function SignupPage() {
               autoCapitalize="off"
               autoCorrect="off"
               spellCheck={false}
+              data-lpignore="true"
+              data-1p-ignore="true"
               required
               fullWidth
               trailing={<span className="text-[13px] whitespace-nowrap">@{DOMAIN}</span>}
@@ -102,7 +104,10 @@ export default function SignupPage() {
               placeholder="Invite code"
               autoComplete="off"
               autoCapitalize="off"
+              autoCorrect="off"
               spellCheck={false}
+              data-lpignore="true"
+              data-1p-ignore="true"
               required
               fullWidth
               leading={<MIcon name="confirmation_number" size={16} />}

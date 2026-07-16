@@ -64,6 +64,23 @@ select {
   box-shadow: none !important;
 }
 
+/* Chrome paints its own opaque fill on autofilled inputs, which punches a light
+   box through the dark field (and, on inputs with a leading/trailing slot, out
+   of the wrapper's frame). background-clip:text stops that fill painting, and
+   the absurd transition delay keeps it from flashing in. The fields also ask
+   not to be autofilled at all — this is the fallback for when the browser or a
+   password manager ignores that. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: var(--foreground);
+  caret-color: var(--foreground);
+  transition: background-color 9999s ease-in-out 0s;
+}
+
 *:focus {
   outline: none !important;
   box-shadow: none !important;
