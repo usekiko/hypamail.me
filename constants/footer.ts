@@ -6,4 +6,8 @@ export const FOOTER_COLUMNS = [
       { label: "Sign in", href: "/login" },
     ],
   },
+  {
+    title: "Other projects",
+    links: [{ label: "Hypastack", href: "https://hypastack.com/" }],
+  },
 ];
