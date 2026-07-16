@@ -114,10 +114,6 @@ export default function SignupPage() {
             />
           </div>
 
-          <p className="text-[12px] text-[#898e97] pl-1">
-            Invite-only — a password is generated for you.
-          </p>
-
           <ShineButton type="submit" disabled={pending} fullWidth variant="primary">
             {pending ? "Creating…" : "Create account"}
           </ShineButton>
