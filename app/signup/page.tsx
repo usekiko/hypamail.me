@@ -382,6 +382,7 @@ export default function SignupPage() {
       )}
 
       <form onSubmit={onBegin} className="space-y-4">
+        {error && <AlertMessage tone="error" style={{ marginBottom: 0 }}>{error}</AlertMessage>}
         <div>
           <label className="block text-[13px] font-medium text-[#f7f8f8] mb-2 pl-1" htmlFor="username">
             Username
@@ -431,7 +432,6 @@ export default function SignupPage() {
         ) : (
           <p className="text-[12px] text-[#898e97] pl-1">(Turnstile not configured)</p>
         )}
-        {error && <AlertMessage tone="error" style={{ marginBottom: 0 }}>{error}</AlertMessage>}
 
         <ShineButton type="submit" disabled={busy} fullWidth>
           {busy ? "Checking…" : "Continue"}
