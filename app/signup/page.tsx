@@ -207,6 +207,7 @@ export default function SignupPage() {
           setStep("form");
           setWiz(null);
           setWordsSaved(false);
+          setDownloaded(false);
           setTotpCode("");
         }
         setError(res.error || "Something went wrong.");
