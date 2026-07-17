@@ -1,9 +1,9 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getSession } from "@/lib/session";
-import { logoutAction } from "../actions";
-import { SecondaryButton } from "@/components/ui/secondary-button";
+import { SecondaryLink } from "@/components/ui/link-button";
 import { MIcon } from "@/components/ui/material-icon";
+import SignOut from "../ui/SignOut";
 
 export default async function MailLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
@@ -40,12 +40,12 @@ export default async function MailLayout({ children }: { children: React.ReactNo
             >
               {session.email}
             </span>
-            <form action={logoutAction} style={{ display: "flex" }}>
-              <SecondaryButton type="submit" size="sm" title="Sign out">
-                <MIcon name="logout" size={16} style={{ marginRight: 6 }} />
-                Sign out
-              </SecondaryButton>
-            </form>
+            <SecondaryLink href="/mail/settings" size="sm" iconOnly aria-label="Settings" title="Settings">
+              <MIcon name="settings" size={16} />
+            </SecondaryLink>
+            {/* SignOut (not a bare logout form): it wipes the unlocked mail key
+                from sessionStorage before the server session is revoked. */}
+            <SignOut />
           </div>
         </header>
         {children}

@@ -2,46 +2,98 @@
 
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
+import { createHash, randomBytes } from "crypto";
+import { inviteRequired } from "@/constants/invite";
 import { authenticate } from "@/lib/jmap";
-import { createSession, destroySession } from "@/lib/session";
 import {
   provisionAccount,
+  deleteAccount,
+  rotateAccountPassword,
+  uploadEncryptionKey,
   validateUsername,
   usernameTaken,
   verifyTurnstile,
   generatePassword,
 } from "@/lib/admin";
+import { legacyLoginAvailable, LEGACY_LOGIN_LABEL } from "@/constants/legacy";
 import {
+  registrationOptions,
+  verifyRegistration,
+  authenticationOptions,
+  verifyAuthentication,
+} from "@/lib/webauthn";
+import { generateTotpSecret, totpUri, verifyTotp } from "@/lib/totp";
+import { encryptSecret, decryptSecret } from "@/lib/secrets";
+import {
+  createSession,
+  destroySession,
+  getSession,
+  setCeremony,
+  takeCeremony,
+} from "@/lib/session";
+import {
+  inviteCodeUsable,
   consumeInviteCode,
   releaseInviteCode,
+  usernameExists,
+  createUser,
+  getUserByUsername,
+  getUserById,
+  addCredential,
+  getCredential,
+  getCredentialsForUser,
+  touchCredential,
+  setCredentialPrfWrap,
+  countCredentialsForUser,
+  listCredentialMeta,
+  removeCredential,
+  setRequireTotpOnLogin,
+  recoveryHashMatches,
   hashIp,
   isRateLimited,
   recordAttempt,
   clearAttempts,
+  MAX_PASSKEYS,
+  type CredentialMeta,
+  type CredentialRow,
 } from "@/lib/db";
-import { inviteRequired } from "@/constants/invite";
+import type {
+  RegistrationResponseJSON,
+  AuthenticationResponseJSON,
+} from "@simplewebauthn/server";
 
 const DOMAIN = process.env.MAIL_DOMAIN || "hypamail.me";
 
-// Brute-force limits, keyed by hashed client IP.
-const LOGIN_MAX = 8;
-const LOGIN_WINDOW = 600; // 10 min
+// Brute-force limits, keyed by hashed client IP (and hashed username for the
+// recovery flow, so a distributed attack can't focus one account).
 const SIGNUP_MAX = 10;
 const SIGNUP_WINDOW = 600;
-
-export type FormState = { error?: string; ok?: boolean; email?: string; password?: string } | null;
+const RECOVERY_MAX = 5;
+const RECOVERY_WINDOW = 600;
+// TOTP gate on non-original passkey logins, and on passkey management.
+const LOGIN_TOTP_MAX = 6;
+const LOGIN_TOTP_WINDOW = 600;
+const MANAGE_MAX = 6;
+const MANAGE_WINDOW = 600;
+// Username-first sign-in lookups (see loginBeginForDevice).
+const LOGIN_LOOKUP_MAX = 12;
+const LOGIN_LOOKUP_WINDOW = 600;
+// Legacy migration password checks — the budget the old password login had.
+const LEGACY_MAX = 8;
+const LEGACY_WINDOW = 600;
 
 // Real client IP. We trust ONLY Cloudflare's CF-Connecting-IP, which Cloudflare
 // sets authoritatively and a client cannot override. We deliberately do NOT fall
 // back to X-Forwarded-For: a client can pre-set that header and Cloudflare merely
-// appends to it, so `xff.split(",")[0]` is attacker-controlled — trusting it would
-// let anyone rotate the rate-limit key on every request and defeat brute-force /
-// credential-stuffing protection (even through Cloudflare). Requests arriving
-// without the CF header (i.e. not via the proxy) collapse to one "unknown" bucket,
-// which fails closed. Keep the origin firewalled to Cloudflare IP ranges so this
-// header is always present and trustworthy.
+// appends to it, so trusting it would let anyone rotate the rate-limit key on
+// every request. Requests arriving without the CF header collapse to one
+// "unknown" bucket, which fails closed. (In dev there is no Cloudflare, so we
+// fall back to localhost to keep the limiter usable.)
 function clientIp(h: Headers): string | null {
-  return h.get("cf-connecting-ip")?.trim() || null;
+  const cf = h.get("cf-connecting-ip")?.trim();
+  if (cf) return cf;
+  if (process.env.NODE_ENV === "development") return "127.0.0.1";
+  return null;
 }
 
 async function clientIpHash(): Promise<string> {
@@ -49,17 +101,435 @@ async function clientIpHash(): Promise<string> {
   return hashIp(clientIp(h) || "unknown");
 }
 
-export async function loginAction(_prev: FormState, formData: FormData): Promise<FormState> {
-  const id = String(formData.get("username") || "").trim().toLowerCase();
-  const password = String(formData.get("password") || "");
-  if (!id || !password) return { error: "Enter your username and password." };
-  const email = id.includes("@") ? id : `${id}@${DOMAIN}`;
+function sha256hex(s: string): string {
+  return createHash("sha256").update(s).digest("hex");
+}
 
-  // The app talks to Stalwart over localhost, so the mail server can't see the
-  // real client IP — rate-limit here (hashed IP) to stop password brute-force.
+// ---------------------------------------------------------------------------
+// Signup — three-phase wizard, committed atomically at the end:
+//   1. signupBegin: validate invite+captcha+username, mint WebAuthn challenge
+//      and pending TOTP secret (both live only in an encrypted 15-min cookie).
+//   2. (client) create passkey, generate mail keypair + recovery words, wrap
+//      the private key, scan TOTP QR.
+//   3. signupComplete: verify passkey attestation + TOTP proof, consume the
+//      invite, provision the mailbox, upload the PGP public key, store the
+//      user. Nothing is written anywhere until this step succeeds.
+// ---------------------------------------------------------------------------
+
+export interface SignupBeginResult {
+  error?: string;
+  optionsJSON?: unknown;
+  totpUri?: string;
+  totpSecret?: string;
+  email?: string;
+}
+
+export async function signupBegin(formData: {
+  username: string;
+  invite: string;
+  turnstileToken: string;
+}): Promise<SignupBeginResult> {
+  const username = String(formData.username || "").trim().toLowerCase();
+  const invite = String(formData.invite || "").trim();
+
   const ipHash = await clientIpHash();
-  if (await isRateLimited(ipHash, "login", LOGIN_MAX, LOGIN_WINDOW)) {
+  if (await isRateLimited(ipHash, "signup", SIGNUP_MAX, SIGNUP_WINDOW)) {
     return { error: "Too many attempts. Please wait a few minutes and try again." };
+  }
+
+  const vErr = validateUsername(username);
+  if (vErr) return { error: vErr };
+  const needsInvite = inviteRequired();
+  if (needsInvite && !invite) return { error: "An invite code is required." };
+
+  const ip = clientIp(await headers()) ?? undefined;
+  if (!(await verifyTurnstile(formData.turnstileToken, ip))) {
+    await recordAttempt(ipHash, "signup");
+    return { error: "Bot check failed. Please retry." };
+  }
+
+  if (needsInvite && !(await inviteCodeUsable(invite))) {
+    await recordAttempt(ipHash, "signup");
+    return { error: "Invalid or already-used invite code." };
+  }
+
+  if ((await usernameExists(username)) || (await usernameTaken(username))) {
+    await recordAttempt(ipHash, "signup");
+    return { error: "That username is already taken." };
+  }
+
+  const options = await registrationOptions(username);
+  const totpSecret = generateTotpSecret();
+  const email = `${username}@${DOMAIN}`;
+  await setCeremony({
+    kind: "signup",
+    challenge: options.challenge,
+    username,
+    invite,
+    totpSecret,
+  });
+  return {
+    optionsJSON: options,
+    totpUri: totpUri(totpSecret, email),
+    totpSecret,
+    email,
+  };
+}
+
+export interface SignupCompleteResult {
+  error?: string;
+  fatal?: boolean; // true → wizard must restart from step 1
+  ok?: boolean;
+}
+
+export async function signupComplete(payload: {
+  attestation: unknown;
+  prfCapable: boolean;
+  wrappedKeyPrf: string | null;
+  wrappedKeyRecovery: string;
+  recoveryAuthKey: string;
+  pgpPublicKey: string;
+  totpCode: string;
+}): Promise<SignupCompleteResult> {
+  const ceremony = await takeCeremony("signup");
+  if (!ceremony?.username || !ceremony.totpSecret) {
+    return { error: "Signup session expired — please start over.", fatal: true };
+  }
+  const { username, totpSecret } = ceremony;
+  const invite = ceremony.invite ?? "";
+  const needsInvite = inviteRequired();
+  const email = `${username}@${DOMAIN}`;
+
+  const ipHash = await clientIpHash();
+  if (await isRateLimited(ipHash, "signup", SIGNUP_MAX, SIGNUP_WINDOW)) {
+    return { error: "Too many attempts. Please wait a few minutes.", fatal: true };
+  }
+
+  // Basic shape checks on the client-supplied crypto material.
+  if (
+    !payload.pgpPublicKey?.includes("BEGIN PGP PUBLIC KEY BLOCK") ||
+    !payload.wrappedKeyRecovery ||
+    !payload.recoveryAuthKey
+  ) {
+    return { error: "Malformed signup payload.", fatal: true };
+  }
+
+  // The ceremony cookie was consumed above and is single-use by design, so TOTP
+  // codes can't be brute-forced against one challenge: a wrong code restarts
+  // the wizard.
+  if (!verifyTotp(totpSecret, payload.totpCode)) {
+    await recordAttempt(ipHash, "signup");
+    return { error: "Wrong authenticator code — signup restarted for safety.", fatal: true };
+  }
+
+  const cred = await verifyRegistration(
+    payload.attestation as RegistrationResponseJSON,
+    ceremony.challenge
+  );
+  if (!cred) {
+    await recordAttempt(ipHash, "signup");
+    return { error: "Passkey could not be verified — please start over.", fatal: true };
+  }
+
+  if ((await usernameExists(username)) || (await usernameTaken(username))) {
+    return { error: "That username is already taken.", fatal: true };
+  }
+
+  if (needsInvite && !(await consumeInviteCode(invite, email))) {
+    return { error: "Invalid or already-used invite code.", fatal: true };
+  }
+
+  // Internal mailbox credential: random, never shown to anyone, only unlocks
+  // ciphertext. Stored encrypted server-side.
+  const mailPassword = generatePassword();
+  let accountId: string;
+  try {
+    accountId = await provisionAccount(username, mailPassword);
+  } catch {
+    if (needsInvite) await releaseInviteCode(invite);
+    if (await usernameTaken(username)) return { error: "That username is already taken.", fatal: true };
+    return { error: "Could not create the mailbox. Please try again.", fatal: true };
+  }
+
+  // Encryption-at-rest key upload. If this fails the mailbox would store
+  // plaintext, which violates the whole design — tear the account down.
+  try {
+    await uploadEncryptionKey(email, mailPassword, payload.pgpPublicKey);
+  } catch {
+    try {
+      await deleteAccount(username);
+    } catch {}
+    if (needsInvite) await releaseInviteCode(invite);
+    return { error: "Could not enable mailbox encryption. Please try again.", fatal: true };
+  }
+
+  const userId = await createUser({
+    username,
+    email,
+    accountId,
+    encMailPassword: encryptSecret(mailPassword),
+    pgpPublicKey: payload.pgpPublicKey,
+    wrappedKeyRecovery: payload.wrappedKeyRecovery,
+    recoveryAuthHash: sha256hex(payload.recoveryAuthKey),
+    totpSecretEnc: encryptSecret(totpSecret),
+  });
+  await addCredential({
+    id: cred.id,
+    userId,
+    publicKey: cred.publicKey,
+    counter: cred.counter,
+    transports: cred.transports,
+    prfCapable: payload.prfCapable,
+    wrappedKeyPrf: payload.wrappedKeyPrf,
+    isOriginal: true, // the signup passkey: one-tap login, no TOTP
+  });
+
+  await clearAttempts(ipHash, "signup");
+  await createSession(userId, email);
+  return { ok: true };
+}
+
+// ---------------------------------------------------------------------------
+// Passkey login (usernameless / discoverable)
+// ---------------------------------------------------------------------------
+
+export async function loginBegin(): Promise<{ optionsJSON: unknown }> {
+  const options = await authenticationOptions();
+  await setCeremony({ kind: "login", challenge: options.challenge });
+  return { optionsJSON: options };
+}
+
+// A decoy credential for unknown usernames, so loginBeginForDevice can't be used
+// to probe which accounts exist: the ceremony looks identical and simply fails at
+// the authenticator.
+function decoyCredential(): CredentialRow {
+  return {
+    id: randomBytes(32).toString("base64url"),
+    userId: "0",
+    publicKey: "",
+    counter: 0,
+    transports: ["hybrid", "internal"],
+    prfCapable: false,
+    wrappedKeyPrf: null,
+    isOriginal: false,
+  };
+}
+
+// Username-first sign-in, for when the passkey lives on another device — a phone,
+// or a security key.
+//
+// The usernameless request above sends an empty allowCredentials, which only lets
+// the browser offer passkeys it can enumerate locally. A desktop with no platform
+// passkey store (Linux, or any machine you've never signed in on) therefore has
+// nothing to list and no reason to offer the phone/QR flow, even though the
+// passkey exists. Naming the account lets us send allowCredentials carrying the
+// transports we recorded at registration — "hybrid" for a phone — which is what
+// makes the browser offer to reach it.
+export async function loginBeginForDevice(payload: {
+  username: string;
+}): Promise<{ error?: string; optionsJSON?: unknown }> {
+  const username = String(payload.username || "").trim().toLowerCase();
+
+  const ipHash = await clientIpHash();
+  if (await isRateLimited(ipHash, "login-lookup", LOGIN_LOOKUP_MAX, LOGIN_LOOKUP_WINDOW)) {
+    return { error: "Too many attempts. Please wait a few minutes and try again." };
+  }
+  await recordAttempt(ipHash, "login-lookup");
+
+  const user = await getUserByUsername(username);
+  const creds = user ? await getCredentialsForUser(user.id) : [];
+  const options = await authenticationOptions(creds.length ? creds : [decoyCredential()]);
+  await setCeremony({ kind: "login", challenge: options.challenge });
+  return { optionsJSON: options };
+}
+
+export interface LoginCompleteResult {
+  error?: string;
+  ok?: boolean;
+  needTotp?: boolean; // prove TOTP before the session is issued
+  totpReason?: "added-passkey" | "always-on";
+  wrappedKeyPrf?: string | null;
+  wrappedKeyRecovery?: string;
+  prfCapable?: boolean;
+}
+
+export async function loginComplete(payload: {
+  assertion: unknown;
+}): Promise<LoginCompleteResult> {
+  const ceremony = await takeCeremony("login");
+  if (!ceremony) return { error: "Login session expired — try again." };
+
+  const assertion = payload.assertion as AuthenticationResponseJSON;
+  const credential = await getCredential(assertion.id);
+  if (!credential) return { error: "Unknown passkey. Try account recovery instead." };
+
+  let newCounter: number | null;
+  try {
+    newCounter = await verifyAuthentication(assertion, ceremony.challenge, credential);
+  } catch {
+    newCounter = null;
+  }
+  if (newCounter === null) return { error: "Passkey could not be verified." };
+
+  const user = await getUserById(credential.userId);
+  if (!user) return { error: "Account no longer exists." };
+
+  await touchCredential(credential.id, newCounter);
+
+  // Only the original (signup) passkey logs in with a single tap, and only while
+  // the account hasn't opted into a TOTP code on every sign-in. Otherwise we've
+  // proven possession but hold the session until the second factor is in.
+  if (!credential.isOriginal || user.requireTotpOnLogin) {
+    await setCeremony({
+      kind: "login-totp",
+      challenge: "", // unused; the passkey is already verified
+      userId: user.id,
+      credentialId: credential.id,
+    });
+    return { needTotp: true, totpReason: credential.isOriginal ? "always-on" : "added-passkey" };
+  }
+
+  await createSession(user.id, user.email);
+  return {
+    ok: true,
+    wrappedKeyPrf: credential.wrappedKeyPrf,
+    wrappedKeyRecovery: user.wrappedKeyRecovery,
+    prfCapable: credential.prfCapable,
+  };
+}
+
+// Second step for a non-original passkey login: the TOTP gate. The passkey was
+// already verified in loginComplete; this issues the session on a valid code.
+export async function loginTotp(payload: {
+  totpCode: string;
+}): Promise<LoginCompleteResult> {
+  const ceremony = await takeCeremony("login-totp");
+  if (!ceremony?.userId || !ceremony.credentialId) {
+    return { error: "Login session expired — start again." };
+  }
+
+  const ipHash = await clientIpHash();
+  const userKeyHash = hashIp(`user:${ceremony.userId}`);
+  if (
+    (await isRateLimited(ipHash, "login-totp", LOGIN_TOTP_MAX, LOGIN_TOTP_WINDOW)) ||
+    (await isRateLimited(userKeyHash, "login-totp", LOGIN_TOTP_MAX, LOGIN_TOTP_WINDOW))
+  ) {
+    return { error: "Too many attempts. Please wait a few minutes and try again." };
+  }
+
+  // Both come from the ceremony, not the client: the credential here must be the
+  // one loginComplete actually verified, not just any passkey on the account.
+  const user = await getUserById(ceremony.userId);
+  const credential = await getCredential(ceremony.credentialId);
+  if (!user || !credential || credential.userId !== user.id) {
+    return { error: "Login session expired — start again." };
+  }
+
+  if (!verifyTotp(decryptSecret(user.totpSecretEnc), payload.totpCode)) {
+    await recordAttempt(ipHash, "login-totp");
+    await recordAttempt(userKeyHash, "login-totp");
+    return { error: "Wrong authenticator code." };
+  }
+
+  await clearAttempts(ipHash, "login-totp");
+  await clearAttempts(userKeyHash, "login-totp");
+  await createSession(user.id, user.email);
+  return {
+    ok: true,
+    wrappedKeyPrf: credential.wrappedKeyPrf,
+    wrappedKeyRecovery: user.wrappedKeyRecovery,
+    prfCapable: credential.prfCapable,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Recovery login: username + recovery-code-derived auth key + mandatory TOTP.
+// ---------------------------------------------------------------------------
+
+export interface RecoveryLoginResult {
+  error?: string;
+  ok?: boolean;
+  wrappedKeyRecovery?: string;
+}
+
+export async function recoveryLogin(payload: {
+  username: string;
+  recoveryAuthKey: string;
+  totpCode: string;
+}): Promise<RecoveryLoginResult> {
+  const username = String(payload.username || "").trim().toLowerCase();
+  const ipHash = await clientIpHash();
+  const userKeyHash = hashIp(`user:${username}`);
+
+  if (
+    (await isRateLimited(ipHash, "recovery", RECOVERY_MAX, RECOVERY_WINDOW)) ||
+    (await isRateLimited(userKeyHash, "recovery", RECOVERY_MAX, RECOVERY_WINDOW))
+  ) {
+    return { error: "Too many attempts. Please wait a few minutes and try again." };
+  }
+
+  // Every failure charges the IP. The per-username bucket is charged only once
+  // the recovery code itself checked out, so knowing a username isn't enough to
+  // lock that account out of recovery — while a leaked recovery code still
+  // leaves the 6-digit authenticator code throttled, which is what that bucket
+  // is actually for.
+  const fail = async (chargeUser: boolean) => {
+    await recordAttempt(ipHash, "recovery");
+    if (chargeUser) await recordAttempt(userKeyHash, "recovery");
+    // One generic message: don't reveal which of the three inputs was wrong.
+    return { error: "Wrong username, recovery code, or authenticator code." };
+  };
+
+  const user = await getUserByUsername(username);
+  if (!user) return fail(false);
+  if (!recoveryHashMatches(user.recoveryAuthHash, sha256hex(payload.recoveryAuthKey))) {
+    return fail(false);
+  }
+  if (!verifyTotp(decryptSecret(user.totpSecretEnc), payload.totpCode)) return fail(true);
+
+  await clearAttempts(ipHash, "recovery");
+  await clearAttempts(userKeyHash, "recovery");
+  await createSession(user.id, user.email);
+  return { ok: true, wrappedKeyRecovery: user.wrappedKeyRecovery };
+}
+
+// ---------------------------------------------------------------------------
+// Legacy migration (/login/legacy) — password-era accounts move to a passkey.
+//
+// These accounts exist only in Stalwart (username + password, plaintext
+// mailbox); they have no users row, no passkey, and no encryption, so after
+// this deploy they can't sign in at all. Until LEGACY_LOGIN_UNTIL they can
+// prove the old password once and walk the same wizard as signup: passkey →
+// recovery words → TOTP. Completing it enables encryption-at-rest, rotates the
+// mailbox to a random internal credential (the old password dies), and creates
+// the users row. Messages already in the mailbox stay readable (stored
+// plaintext, and the client renders pre-encryption mail as plain MIME); new
+// mail is ciphertext from the moment encryption is enabled.
+// ---------------------------------------------------------------------------
+
+export async function legacyLoginBegin(payload: {
+  username: string;
+  password: string;
+}): Promise<SignupBeginResult> {
+  if (!legacyLoginAvailable()) {
+    return { error: `Password sign-in ended on ${LEGACY_LOGIN_LABEL} — see /login/legacy for what to do.` };
+  }
+  // Accept "user" or "user@domain", like the old password form did.
+  const username = String(payload.username || "").trim().toLowerCase().split("@")[0];
+  const password = String(payload.password || "");
+  if (!username || !password) return { error: "Enter your username and password." };
+  const email = `${username}@${DOMAIN}`;
+
+  const ipHash = await clientIpHash();
+  if (await isRateLimited(ipHash, "legacy", LEGACY_MAX, LEGACY_WINDOW)) {
+    return { error: "Too many attempts. Please wait a few minutes and try again." };
+  }
+
+  // Already migrated → the passkey flow owns this account now. Checked before
+  // the password so a migrated user with a saved password gets pointed the
+  // right way instead of a confusing "wrong password".
+  if (await usernameExists(username)) {
+    return { error: "This account already moved to passkeys — use the normal sign-in." };
   }
 
   let accountId: string | null;
@@ -69,70 +539,343 @@ export async function loginAction(_prev: FormState, formData: FormData): Promise
     return { error: "Server error. Please try again." };
   }
   if (!accountId) {
-    await recordAttempt(ipHash, "login");
+    await recordAttempt(ipHash, "legacy");
     return { error: "Wrong username or password." };
   }
+  await clearAttempts(ipHash, "legacy");
 
-  await clearAttempts(ipHash, "login");
-  await createSession({ email, password, accountId });
-  redirect("/mail");
+  const options = await registrationOptions(username);
+  const totpSecret = generateTotpSecret();
+  await setCeremony({
+    kind: "legacy",
+    challenge: options.challenge,
+    username,
+    totpSecret,
+    legacyPassword: password,
+  });
+  return {
+    optionsJSON: options,
+    totpUri: totpUri(totpSecret, email),
+    totpSecret,
+    email,
+  };
 }
 
-export async function signupAction(_prev: FormState, formData: FormData): Promise<FormState> {
-  const username = String(formData.get("username") || "").trim().toLowerCase();
-  const invite = String(formData.get("invite") || "").trim();
-  const token = String(formData.get("cf-turnstile-response") || "");
+export async function legacyMigrateComplete(payload: {
+  attestation: unknown;
+  prfCapable: boolean;
+  wrappedKeyPrf: string | null;
+  wrappedKeyRecovery: string;
+  recoveryAuthKey: string;
+  pgpPublicKey: string;
+  totpCode: string;
+}): Promise<SignupCompleteResult> {
+  const ceremony = await takeCeremony("legacy");
+  if (!ceremony?.username || !ceremony.totpSecret || !ceremony.legacyPassword) {
+    return { error: "Migration session expired — please start over.", fatal: true };
+  }
+  if (!legacyLoginAvailable()) {
+    return { error: "The migration window has closed.", fatal: true };
+  }
+  const { username, totpSecret, legacyPassword } = ceremony;
+  const email = `${username}@${DOMAIN}`;
 
   const ipHash = await clientIpHash();
-  if (await isRateLimited(ipHash, "signup", SIGNUP_MAX, SIGNUP_WINDOW)) {
+  if (await isRateLimited(ipHash, "legacy", LEGACY_MAX, LEGACY_WINDOW)) {
+    return { error: "Too many attempts. Please wait a few minutes.", fatal: true };
+  }
+
+  if (
+    !payload.pgpPublicKey?.includes("BEGIN PGP PUBLIC KEY BLOCK") ||
+    !payload.wrappedKeyRecovery ||
+    !payload.recoveryAuthKey
+  ) {
+    return { error: "Malformed migration payload.", fatal: true };
+  }
+
+  // Ceremony consumed above → single-use, same anti-brute-force property as
+  // signupComplete: a wrong code restarts the wizard (and re-proves the password).
+  if (!verifyTotp(totpSecret, payload.totpCode)) {
+    await recordAttempt(ipHash, "legacy");
+    return { error: "Wrong authenticator code — migration restarted for safety.", fatal: true };
+  }
+
+  const cred = await verifyRegistration(
+    payload.attestation as RegistrationResponseJSON,
+    ceremony.challenge
+  );
+  if (!cred) {
+    await recordAttempt(ipHash, "legacy");
+    return { error: "Passkey could not be verified — please start over.", fatal: true };
+  }
+
+  // Double-submit / parallel-tab race: someone finished this migration already.
+  if (await usernameExists(username)) {
+    return { error: "This account already moved to passkeys — use the normal sign-in.", fatal: true };
+  }
+
+  // Ordered so every failure before the rotation leaves the account exactly as
+  // it was (old password valid, wizard restartable). Enabling encryption runs
+  // with the user's own just-proven credentials; a retry after a partial
+  // failure only uploads another key, which is harmless.
+  try {
+    await uploadEncryptionKey(email, legacyPassword, payload.pgpPublicKey);
+  } catch {
+    return { error: "Could not enable mailbox encryption. Please try again.", fatal: true };
+  }
+
+  // Point of no return: from here the old password is gone. Failures between
+  // the rotation and the users insert would strand the account (encrypted,
+  // internal credential, no users row) — kept to two DB writes on purpose;
+  // recovery from that would be an admin re-rotating the password.
+  const mailPassword = generatePassword();
+  try {
+    await rotateAccountPassword(username, mailPassword);
+  } catch {
+    return { error: "Could not secure the mailbox. Please try again.", fatal: true };
+  }
+
+  let accountId: string | null;
+  try {
+    accountId = await authenticate(email, mailPassword);
+  } catch {
+    accountId = null;
+  }
+  if (!accountId) {
+    return { error: "Could not verify the migrated mailbox. Please contact us.", fatal: true };
+  }
+
+  const userId = await createUser({
+    username,
+    email,
+    accountId,
+    encMailPassword: encryptSecret(mailPassword),
+    pgpPublicKey: payload.pgpPublicKey,
+    wrappedKeyRecovery: payload.wrappedKeyRecovery,
+    recoveryAuthHash: sha256hex(payload.recoveryAuthKey),
+    totpSecretEnc: encryptSecret(totpSecret),
+  });
+  await addCredential({
+    id: cred.id,
+    userId,
+    publicKey: cred.publicKey,
+    counter: cred.counter,
+    transports: cred.transports,
+    prfCapable: payload.prfCapable,
+    wrappedKeyPrf: payload.wrappedKeyPrf,
+    isOriginal: true, // the migration passkey plays the signup passkey's role
+  });
+
+  await clearAttempts(ipHash, "legacy");
+  await createSession(userId, email);
+  return { ok: true };
+}
+
+// ---------------------------------------------------------------------------
+// Passkey management (Settings). Adding, resetting, or removing a passkey ALWAYS
+// requires the recovery code + a TOTP code — even while signed in — so a stolen
+// live session can't enroll or strip a device. Max 3 passkeys per account.
+// ---------------------------------------------------------------------------
+
+// Shared gate: valid session + recovery-code proof + TOTP. Returns the user or
+// an error string.
+async function manageGate(
+  recoveryAuthKey: string,
+  totpCode: string
+): Promise<{ user: NonNullable<Awaited<ReturnType<typeof getUserById>>> } | { error: string }> {
+  const session = await getSession();
+  if (!session) return { error: "Not signed in." };
+
+  const ipHash = await clientIpHash();
+  const userKeyHash = hashIp(`user:${session.userId}`);
+  if (
+    (await isRateLimited(ipHash, "manage", MANAGE_MAX, MANAGE_WINDOW)) ||
+    (await isRateLimited(userKeyHash, "manage", MANAGE_MAX, MANAGE_WINDOW))
+  ) {
     return { error: "Too many attempts. Please wait a few minutes and try again." };
   }
 
-  const vErr = validateUsername(username);
-  if (vErr) return { error: vErr };
-  // During the open-signup window we ignore invite codes entirely rather than
-  // consuming any that are sent, so nobody burns a code they didn't need.
-  const needsInvite = inviteRequired();
-  if (needsInvite && !invite) return { error: "An invite code is required." };
+  const user = session.user;
+  const bad = async () => {
+    await recordAttempt(ipHash, "manage");
+    await recordAttempt(userKeyHash, "manage");
+    return { error: "Wrong recovery code or authenticator code." };
+  };
+  if (!recoveryHashMatches(user.recoveryAuthHash, sha256hex(recoveryAuthKey))) return bad();
+  if (!verifyTotp(decryptSecret(user.totpSecretEnc), totpCode)) return bad();
 
-  const ip = clientIp(await headers()) ?? undefined;
-  if (!(await verifyTurnstile(token, ip))) {
-    await recordAttempt(ipHash, "signup");
-    return { error: "Bot check failed. Please retry." };
+  await clearAttempts(ipHash, "manage");
+  await clearAttempts(userKeyHash, "manage");
+  return { user };
+}
+
+export async function listPasskeys(): Promise<{
+  error?: string;
+  passkeys?: CredentialMeta[];
+  max?: number;
+  requireTotpOnLogin?: boolean;
+}> {
+  const session = await getSession();
+  if (!session) return { error: "Not signed in." };
+  return {
+    passkeys: await listCredentialMeta(session.userId),
+    max: MAX_PASSKEYS,
+    requireTotpOnLogin: session.user.requireTotpOnLogin,
+  };
+}
+
+// Toggle "ask for a TOTP code on every sign-in, including the original passkey".
+//
+// The two directions are gated differently on purpose:
+//   - Turning it ON only needs a current TOTP code. It's a hardening step, so it
+//     shouldn't cost 12 words — but requiring a live code proves the authenticator
+//     actually works, which is what stops someone locking themselves out of every
+//     future sign-in.
+//   - Turning it OFF is a downgrade, so it needs the full recovery + TOTP gate:
+//     someone who steals a live session must not be able to quietly weaken logins.
+export async function setLoginTotpRequired(payload: {
+  enable: boolean;
+  totpCode: string;
+  recoveryAuthKey?: string;
+}): Promise<{ error?: string; ok?: boolean }> {
+  if (payload.enable) {
+    const session = await getSession();
+    if (!session) return { error: "Not signed in." };
+
+    const ipHash = await clientIpHash();
+    const userKeyHash = hashIp(`user:${session.userId}`);
+    if (
+      (await isRateLimited(ipHash, "manage", MANAGE_MAX, MANAGE_WINDOW)) ||
+      (await isRateLimited(userKeyHash, "manage", MANAGE_MAX, MANAGE_WINDOW))
+    ) {
+      return { error: "Too many attempts. Please wait a few minutes and try again." };
+    }
+    if (!verifyTotp(decryptSecret(session.user.totpSecretEnc), payload.totpCode)) {
+      await recordAttempt(ipHash, "manage");
+      await recordAttempt(userKeyHash, "manage");
+      return { error: "Wrong authenticator code." };
+    }
+    await clearAttempts(ipHash, "manage");
+    await clearAttempts(userKeyHash, "manage");
+    await setRequireTotpOnLogin(session.userId, true);
+    return { ok: true };
   }
 
-  if (await usernameTaken(username)) {
-    await recordAttempt(ipHash, "signup");
-    return { error: "That username is already taken." };
-  }
+  const gate = await manageGate(payload.recoveryAuthKey ?? "", payload.totpCode);
+  if ("error" in gate) return { error: gate.error };
+  await setRequireTotpOnLogin(gate.user.id, false);
+  return { ok: true };
+}
 
-  // Password is generated for the user, never chosen.
-  const password = generatePassword();
-  const email = `${username}@${DOMAIN}`;
-  if (needsInvite && !(await consumeInviteCode(invite, email))) {
-    await recordAttempt(ipHash, "signup");
-    return { error: "Invalid or already-used invite code." };
-  }
+export async function addPasskeyBegin(payload: {
+  recoveryAuthKey: string;
+  totpCode: string;
+}): Promise<{ error?: string; optionsJSON?: unknown; wrappedKeyRecovery?: string }> {
+  const gate = await manageGate(payload.recoveryAuthKey, payload.totpCode);
+  if ("error" in gate) return { error: gate.error };
+  const { user } = gate;
 
-  try {
-    await provisionAccount(username, password);
-  } catch {
-    if (needsInvite) await releaseInviteCode(invite);
-    // Most likely cause is a concurrent signup that claimed the same username
-    // between our check and the create — surface that precisely.
-    if (await usernameTaken(username)) return { error: "That username is already taken." };
-    return { error: "Could not create the account. Please try again." };
+  if ((await countCredentialsForUser(user.id)) >= MAX_PASSKEYS) {
+    return { error: `You can have at most ${MAX_PASSKEYS} passkeys. Remove one first.` };
   }
+  const existing = await getCredentialsForUser(user.id);
+  const options = await registrationOptions(user.username, existing);
+  await setCeremony({ kind: "add-passkey", challenge: options.challenge, userId: user.id });
+  // The client re-wraps the mail key under the new passkey's PRF; it unwraps the
+  // source key from the recovery blob using the words it already collected.
+  return { optionsJSON: options, wrappedKeyRecovery: user.wrappedKeyRecovery };
+}
 
-  try {
-    const accountId = await authenticate(email, password);
-    if (accountId) await createSession({ email, password, accountId });
-  } catch {
-    // Account exists; session just couldn't be established. Still show the
-    // credentials so the user can sign in manually.
+export async function addPasskeyComplete(payload: {
+  attestation: unknown;
+  prfCapable: boolean;
+  wrappedKeyPrf: string | null;
+  nickname?: string;
+}): Promise<{ error?: string; ok?: boolean }> {
+  const session = await getSession();
+  if (!session) return { error: "Not signed in." };
+  const ceremony = await takeCeremony("add-passkey");
+  if (!ceremony || ceremony.userId !== session.userId) {
+    return { error: "Ceremony expired — try again." };
   }
-  // Don't redirect — return the credentials so the user can save the generated password.
-  return { ok: true, email, password };
+  // Re-check the cap at commit time (guards a double-submit race).
+  if ((await countCredentialsForUser(session.userId)) >= MAX_PASSKEYS) {
+    return { error: `You can have at most ${MAX_PASSKEYS} passkeys.` };
+  }
+  const cred = await verifyRegistration(
+    payload.attestation as RegistrationResponseJSON,
+    ceremony.challenge
+  );
+  if (!cred) return { error: "Passkey could not be verified." };
+  await addCredential({
+    id: cred.id,
+    userId: session.userId,
+    publicKey: cred.publicKey,
+    counter: cred.counter,
+    transports: cred.transports,
+    prfCapable: payload.prfCapable,
+    wrappedKeyPrf: payload.wrappedKeyPrf,
+    nickname: payload.nickname?.slice(0, 60),
+    isOriginal: false, // added later → login with it also requires TOTP
+  });
+  return { ok: true };
+}
+
+export async function removePasskey(payload: {
+  recoveryAuthKey: string;
+  totpCode: string;
+  credentialId: string;
+}): Promise<{ error?: string; ok?: boolean }> {
+  const gate = await manageGate(payload.recoveryAuthKey, payload.totpCode);
+  if ("error" in gate) return { error: gate.error };
+  const cred = await getCredential(payload.credentialId);
+  if (!cred || cred.userId !== gate.user.id) {
+    return { error: "That passkey isn't on your account." };
+  }
+  // The original (signup) passkey is permanent: it's the only credential that
+  // logs in without a TOTP code, and it can never be re-created for an existing
+  // account, so removing it would silently downgrade the account forever.
+  if (cred.isOriginal) {
+    return { error: "Your original passkey is permanent and can't be removed." };
+  }
+  const removed = await removeCredential(payload.credentialId, gate.user.id);
+  if (!removed) return { error: "That passkey isn't on your account." };
+  return { ok: true };
+}
+
+// Wrapped key material for the signed-in user, so a fresh tab (session cookie
+// valid, but sessionStorage empty) can re-unlock the mail key locally — via a
+// passkey PRF tap or the recovery words. Blobs only; nothing here decrypts mail.
+export async function getWrappedKeys(): Promise<{
+  error?: string;
+  wrappedKeyRecovery?: string;
+  credentials?: { id: string; wrappedKeyPrf: string | null }[];
+}> {
+  const session = await getSession();
+  if (!session) return { error: "Not signed in." };
+  const creds = await getCredentialsForUser(session.userId);
+  return {
+    wrappedKeyRecovery: session.user.wrappedKeyRecovery,
+    credentials: creds.map((c) => ({ id: c.id, wrappedKeyPrf: c.wrappedKeyPrf })),
+  };
+}
+
+// Self-heal: store a PRF-wrapped mail key for a credential the user just used.
+// Authenticators commonly reveal PRF output only during `get()`, so the first
+// login (not registration) is when this wrap becomes possible.
+export async function setPrfWrap(payload: {
+  credentialId: string;
+  wrappedKeyPrf: string;
+}): Promise<{ error?: string; ok?: boolean }> {
+  const session = await getSession();
+  if (!session) return { error: "Not signed in." };
+  const cred = await getCredential(payload.credentialId);
+  if (!cred || cred.userId !== session.userId) return { error: "Unknown credential." };
+  if (!payload.wrappedKeyPrf || payload.wrappedKeyPrf.length > 16384) {
+    return { error: "Malformed key blob." };
+  }
+  await setCredentialPrfWrap(cred.id, session.userId, payload.wrappedKeyPrf);
+  return { ok: true };
 }
 
 export async function logoutAction(): Promise<void> {

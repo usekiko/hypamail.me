@@ -1,6 +1,10 @@
-// JMAP client for Stalwart. Runs server-side only (talks to the localhost admin
-// listener on the VPS). User mail access uses the user's own Basic credentials;
-// provisioning uses the admin credentials.
+// JMAP client for Stalwart. Runs server-side only (talks to the localhost
+// listener on the VPS). User mail access uses the user's own internal Basic
+// credentials; provisioning uses the admin credentials (see lib/admin.ts).
+//
+// Zero-access note: this module only ever handles message *metadata* (headers,
+// which Stalwart keeps in cleartext) and opaque encrypted blobs. Message bodies
+// are PGP ciphertext that is decrypted in the user's browser — never here.
 
 const JMAP_URL = process.env.JMAP_URL || "http://127.0.0.1:8088";
 const USING_MAIL = ["urn:ietf:params:jmap:core", "urn:ietf:params:jmap:mail"];
@@ -12,7 +16,7 @@ export function basicAuth(user: string, pass: string): string {
 type MethodCall = [string, Record<string, unknown>, string];
 
 export async function jmap(auth: string, using: string[], methodCalls: MethodCall[]) {
-  const res = await fetch(`${JMAP_URL}/jmap`, {
+  const res = await fetch(`${JMAP_URL}/jmap/`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: auth },
     body: JSON.stringify({ using, methodCalls }),
@@ -56,7 +60,6 @@ export interface MailSummary {
   id: string;
   from: { name?: string; email: string }[];
   subject: string | null;
-  preview: string;
   receivedAt: string;
   unread: boolean;
   spam: boolean;
@@ -90,7 +93,7 @@ export async function listInbox(
       {
         accountId,
         "#ids": { resultOf: "0", name: "Email/query", path: "/ids" },
-        properties: ["from", "subject", "preview", "receivedAt", "keywords", "mailboxIds"],
+        properties: ["from", "subject", "receivedAt", "keywords", "mailboxIds"],
       },
       "1",
     ],
@@ -100,25 +103,25 @@ export async function listInbox(
     id: e.id as string,
     from: (e.from as MailSummary["from"]) || [],
     subject: (e.subject as string) ?? null,
-    preview: (e.preview as string) || "",
     receivedAt: e.receivedAt as string,
     unread: !((e.keywords as Record<string, boolean>) || {})["$seen"],
     spam: junk ? !!((e.mailboxIds as Record<string, boolean>) || {})[junk] : false,
   }));
 }
 
-export interface MailDetail extends MailSummary {
+export interface MailMeta extends MailSummary {
   to: { name?: string; email: string }[];
-  html: string | null;
-  text: string | null;
+  blobId: string;
 }
 
-export async function getEmail(
+// Header metadata + the raw-blob id. The body itself is fetched through
+// downloadRaw and decrypted in the browser.
+export async function getEmailMeta(
   email: string,
   password: string,
   accountId: string,
   id: string
-): Promise<MailDetail | null> {
+): Promise<MailMeta | null> {
   const auth = basicAuth(email, password);
   const { junk } = await inboxAndJunk(auth, accountId);
   const responses = await jmap(auth, USING_MAIL, [
@@ -127,12 +130,7 @@ export async function getEmail(
       {
         accountId,
         ids: [id],
-        properties: [
-          "from", "to", "subject", "preview", "receivedAt", "keywords", "mailboxIds",
-          "htmlBody", "textBody", "bodyValues",
-        ],
-        fetchHTMLBodyValues: true,
-        fetchTextBodyValues: true,
+        properties: ["blobId", "from", "to", "subject", "receivedAt", "keywords", "mailboxIds"],
       },
       "0",
     ],
@@ -140,21 +138,31 @@ export async function getEmail(
   const list = (responses[0][1].list as Array<Record<string, unknown>>) || [];
   const e = list[0];
   if (!e) return null;
-  const bodyValues = (e.bodyValues as Record<string, { value: string }>) || {};
-  const partText = (parts: Array<{ partId?: string }> | undefined) =>
-    (parts || []).map((p) => (p.partId ? bodyValues[p.partId]?.value : "")).join("\n");
   return {
     id: e.id as string,
-    from: (e.from as MailDetail["from"]) || [],
-    to: (e.to as MailDetail["to"]) || [],
+    blobId: e.blobId as string,
+    from: (e.from as MailMeta["from"]) || [],
+    to: (e.to as MailMeta["to"]) || [],
     subject: (e.subject as string) ?? null,
-    preview: (e.preview as string) || "",
     receivedAt: e.receivedAt as string,
     unread: !((e.keywords as Record<string, boolean>) || {})["$seen"],
     spam: junk ? !!((e.mailboxIds as Record<string, boolean>) || {})[junk] : false,
-    html: partText(e.htmlBody as Array<{ partId?: string }>) || null,
-    text: partText(e.textBody as Array<{ partId?: string }>) || null,
   };
+}
+
+// Stream the raw (encrypted) RFC 5322 message bytes.
+export async function downloadRaw(
+  email: string,
+  password: string,
+  accountId: string,
+  blobId: string
+): Promise<ArrayBuffer> {
+  const res = await fetch(
+    `${JMAP_URL}/jmap/download/${encodeURIComponent(accountId)}/${encodeURIComponent(blobId)}/raw?accept=message/rfc822`,
+    { headers: { Authorization: basicAuth(email, password) } }
+  );
+  if (!res.ok) throw new Error(`blob download failed: ${res.status}`);
+  return res.arrayBuffer();
 }
 
 export async function markSeen(

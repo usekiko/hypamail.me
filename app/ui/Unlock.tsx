@@ -1,0 +1,128 @@
+"use client";
+
+// Unlocks the mail key into sessionStorage for an already-authenticated session
+// (fresh tab, browser restart). Two local paths, no re-login:
+//   - passkey tap → PRF output → unwrap the per-credential blob
+//   - 12 recovery words → unwrap the recovery blob
+// Fetches only wrapped blobs from the server; unwrapping happens here.
+import { useState } from "react";
+import { getWrappedKeys, setPrfWrap } from "../actions";
+import {
+  localPrfGet,
+  unwrapWithPrf,
+  unwrapWithRecovery,
+  wrapWithPrf,
+  recoveryWordsError,
+  storeMailKey,
+} from "@/lib/client/crypto";
+import { ShineButton } from "@/components/ui/shine-button";
+import { SecondaryButton } from "@/components/ui/secondary-button";
+import { AlertMessage } from "@/components/ui/alert-message";
+import { MIcon } from "@/components/ui/material-icon";
+import RecoveryWordsInput from "./RecoveryWordsInput";
+
+export default function Unlock({ onUnlocked }: { onUnlocked: (key: string) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [words, setWords] = useState("");
+
+  function done(key: string) {
+    storeMailKey(key);
+    onUnlocked(key);
+  }
+
+  async function viaPasskey() {
+    setError(null);
+    setBusy(true);
+    try {
+      const keys = await getWrappedKeys();
+      if (keys.error) {
+        setError(keys.error);
+        return;
+      }
+      const got = await localPrfGet();
+      const cred = keys.credentials?.find((c) => c.id === got.credentialId);
+      if (!got.prfOutput || !cred?.wrappedKeyPrf) {
+        setError(
+          !got.prfOutput
+            ? "This passkey/browser can't derive the unlock key — use your recovery words below."
+            : "This passkey has no stored key yet — unlock with your recovery words once, then it will."
+        );
+        return;
+      }
+      done(await unwrapWithPrf(got.prfOutput, cred.wrappedKeyPrf));
+    } catch {
+      setError("Passkey unlock failed — try your recovery words.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function viaWords(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
+    const wordsErr = recoveryWordsError(words);
+    if (wordsErr) {
+      setError(wordsErr);
+      return;
+    }
+    setBusy(true);
+    try {
+      const keys = await getWrappedKeys();
+      if (keys.error || !keys.wrappedKeyRecovery) {
+        setError(keys.error || "Could not load your key.");
+        return;
+      }
+      let key: string;
+      try {
+        key = await unwrapWithRecovery(words, keys.wrappedKeyRecovery);
+      } catch {
+        setError("Wrong recovery code.");
+        return;
+      }
+      // Opportunistically PRF-wrap for this device's passkey so next time is
+      // one tap. Best effort; failures are fine.
+      try {
+        const got = await localPrfGet();
+        const cred = keys.credentials?.find((c) => c.id === got.credentialId);
+        if (got.prfOutput && cred && !cred.wrappedKeyPrf) {
+          await setPrfWrap({
+            credentialId: got.credentialId,
+            wrappedKeyPrf: await wrapWithPrf(got.prfOutput, key),
+          });
+        }
+      } catch {}
+      done(key);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="panel" style={{ padding: "16px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "0.75rem" }}>
+        <MIcon name="lock" size={16} />
+        <b>Mailbox locked</b>
+      </div>
+      <p style={{ color: "var(--muted-foreground)", fontSize: "13px", margin: "0 0 1rem", lineHeight: 1.6 }}>
+        Your mail is end-to-end encrypted and this tab doesn&apos;t hold the key yet.
+        Unlock it with your passkey.
+      </p>
+      <ShineButton onClick={viaPasskey} disabled={busy} fullWidth style={{ marginBottom: "1rem" }}>
+        {busy ? "Waiting…" : "Unlock with passkey"}
+      </ShineButton>
+      <details>
+        <summary style={{ color: "var(--muted-foreground)", fontSize: "13px", cursor: "pointer" }}>
+          Use recovery words instead
+        </summary>
+        <form onSubmit={viaWords} style={{ marginTop: "0.75rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+          <RecoveryWordsInput value={words} onChange={setWords} disabled={busy} />
+          <SecondaryButton type="submit" disabled={busy || !words.trim()} fullWidth>
+            Unlock
+          </SecondaryButton>
+        </form>
+      </details>
+      {error && <AlertMessage tone="error" style={{ marginTop: "0.75rem", marginBottom: 0 }}>{error}</AlertMessage>}
+    </div>
+  );
+}

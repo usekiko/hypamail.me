@@ -1,34 +1,34 @@
 "use client";
 
-// Passwordless signup wizard:
-//   1. username + invite + Turnstile
-//   2. create a passkey (browser dialog)
+// Time-boxed migration for password-era accounts (see constants/legacy.ts).
+// Prove the old password once, then walk the same wizard as signup:
+//   1. username + password (the last time it's ever used)
+//   2. create a passkey
 //   3. save the 12-word recovery code (generated locally, never sent anywhere)
-//   4. mandatory authenticator (TOTP) enrollment — QR + verify code
-// While the user reads the words, the browser has already generated the PGP
-// mail keypair and wrapped its private key; the server only ever receives
-// wrapped blobs and the public key.
+//   4. mandatory authenticator (TOTP) enrollment
+// Completing it enables zero-access encryption for the mailbox and retires the
+// password. Messages already in the inbox stay readable; new mail is encrypted
+// before it touches disk.
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
-import Turnstile from "../ui/Turnstile";
-import PasskeyHelp from "../ui/PasskeyHelp";
-import FirefoxNote from "../ui/FirefoxNote";
+import PasskeyHelp from "../../ui/PasskeyHelp";
+import FirefoxNote from "../../ui/FirefoxNote";
 import { ShineButton } from "@/components/ui/shine-button";
 import { SecondaryButton } from "@/components/ui/secondary-button";
 import { TextInput } from "@/components/ui/text-input";
 import { AlertMessage } from "@/components/ui/alert-message";
 import { MIcon } from "@/components/ui/material-icon";
 import { AuthColumn, AuthPanel } from "@/components/auth-panel";
-import { inviteRequired, INVITE_FREE_LABEL } from "@/constants/invite";
+import { legacyLoginAvailable, LEGACY_LOGIN_LABEL } from "@/constants/legacy";
 import {
-  signupBegin,
-  signupComplete,
+  legacyLoginBegin,
+  legacyMigrateComplete,
   loginBegin,
   setPrfWrap,
   type SignupBeginResult,
-} from "../actions";
+} from "../../actions";
 import {
   generateRecoveryWords,
   deriveRecoveryAuthKey,
@@ -41,9 +41,7 @@ import {
 } from "@/lib/client/crypto";
 
 const DOMAIN = process.env.NEXT_PUBLIC_MAIL_DOMAIN || "hypamail.me";
-const SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "";
 
-// Every wizard step shares the split auth shell from main's login/signup pages.
 const Shell = ({
   title,
   subtitle,
@@ -63,7 +61,7 @@ const Shell = ({
   </div>
 );
 
-type Step = "form" | "passkey" | "words" | "totp";
+type Step = "password" | "passkey" | "words" | "totp";
 
 interface WizardState {
   begin: SignupBeginResult;
@@ -79,9 +77,9 @@ interface WizardState {
   recoveryAuthKey?: string;
 }
 
-export default function SignupPage() {
+export default function LegacyLoginPage() {
   const router = useRouter();
-  const [step, setStep] = useState<Step>("form");
+  const [step, setStep] = useState<Step>("password");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [wiz, setWiz] = useState<WizardState | null>(null);
@@ -89,10 +87,7 @@ export default function SignupPage() {
   const [downloaded, setDownloaded] = useState(false);
   const [totpCode, setTotpCode] = useState("");
   const qrRef = useRef<HTMLCanvasElement>(null);
-  const needsInvite = inviteRequired();
 
-  // Save the recovery code as a plain-text file. This is the user's only copy —
-  // the server never sees these words, so there is nothing to re-send later.
   function downloadRecoveryCode() {
     if (!wiz?.words || !wiz.begin.email) return;
     const body = [
@@ -126,16 +121,15 @@ export default function SignupPage() {
     }
   }, [step, wiz]);
 
-  async function onBegin(e: React.FormEvent<HTMLFormElement>) {
+  async function onPassword(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
     setBusy(true);
     try {
       const fd = new FormData(e.currentTarget);
-      const begin = await signupBegin({
+      const begin = await legacyLoginBegin({
         username: String(fd.get("username") || ""),
-        invite: String(fd.get("invite") || ""),
-        turnstileToken: String(fd.get("cf-turnstile-response") || ""),
+        password: String(fd.get("password") || ""),
       });
       if (begin.error || !begin.optionsJSON) {
         setError(begin.error || "Something went wrong.");
@@ -193,7 +187,7 @@ export default function SignupPage() {
     setError(null);
     setBusy(true);
     try {
-      const res = await signupComplete({
+      const res = await legacyMigrateComplete({
         attestation: wiz.attestation,
         prfCapable: !!wiz.prfCapable,
         wrappedKeyPrf: wiz.wrappedKeyPrf ?? null,
@@ -204,9 +198,10 @@ export default function SignupPage() {
       });
       if (!res.ok) {
         if (res.fatal) {
-          setStep("form");
+          setStep("password");
           setWiz(null);
           setWordsSaved(false);
+          setDownloaded(false);
           setTotpCode("");
         }
         setError(res.error || "Something went wrong.");
@@ -233,25 +228,45 @@ export default function SignupPage() {
     }
   }
 
-  const signInFooter = (
+  const footer = (
     <>
-      Already have an account?{" "}
+      Already moved to passkeys?{" "}
       <Link href="/login" className="text-[#f7f8f8] font-semibold hover:underline">
         Sign in
       </Link>
     </>
   );
 
+  // The window is enforced server-side; this is just the honest front door.
+  if (!legacyLoginAvailable()) {
+    return (
+      <Shell
+        title="Password sign-in has ended"
+        subtitle="hypamail is passkey-only now."
+        footer={footer}
+      >
+        <p className="text-[13px] text-[#898e97] leading-[1.6] m-0 mb-4">
+          The migration window for password-era accounts closed on {LEGACY_LOGIN_LABEL}. If you
+          never moved your account to a passkey, email{" "}
+          <a href="mailto:hello@hypamail.me" className="text-[#f7f8f8] underline">
+            hello@hypamail.me
+          </a>{" "}
+          from another address and we&apos;ll sort it out.
+        </p>
+      </Shell>
+    );
+  }
+
   if (step === "passkey") {
     return (
       <Shell
         title="Create your passkey"
-        subtitle={`${wiz?.begin.email} has no password.`}
-        footer={signInFooter}
+        subtitle="Your password just worked for the last time."
+        footer={footer}
       >
         <p className="text-[13px] text-[#898e97] leading-[1.6] m-0 mb-6">
-          You sign in with a passkey — your fingerprint, face, or device PIN. Your browser
-          will ask you to create one now.
+          From now on you&apos;ll sign in to {wiz?.begin.email} with a passkey — your
+          fingerprint, face, or device PIN. Your browser will ask you to create one now.
         </p>
         <ShineButton onClick={onCreatePasskey} disabled={busy} fullWidth>
           <MIcon name="passkey" size={18} style={{ marginRight: 8 }} />
@@ -269,7 +284,7 @@ export default function SignupPage() {
       <Shell
         title="Your recovery code"
         subtitle="It will not be shown again."
-        footer={signInFooter}
+        footer={footer}
       >
         <p className="text-[13px] text-[#898e97] leading-[1.6] m-0 mb-5">
           Write these 12 words down and keep them safe. They are the{" "}
@@ -279,7 +294,7 @@ export default function SignupPage() {
         </p>
         <div className="panel mb-4 select-all" style={{ padding: 14 }}>
           <div
-            className="grid grid-cols-3 font-mono text-[14px]"
+            className="grid grid-cols-3 text-[14px]"
             style={{ gap: "10px 16px", fontFamily: "ui-monospace, monospace" }}
           >
             {wiz.words.split(" ").map((w, i) => (
@@ -322,7 +337,7 @@ export default function SignupPage() {
       <Shell
         title="Set up 2FA"
         subtitle="Scan this with an authenticator app (Aegis, Ente Auth, Google Authenticator…)."
-        footer={signInFooter}
+        footer={footer}
       >
         <p className="text-[13px] text-[#898e97] leading-[1.6] m-0 mb-5">
           It protects account recovery: recovery needs your 12 words{" "}
@@ -355,7 +370,7 @@ export default function SignupPage() {
             />
           </div>
           <ShineButton type="submit" disabled={busy || totpCode.length !== 6} fullWidth>
-            {busy ? "Creating account…" : "Verify & finish"}
+            {busy ? "Finishing migration…" : "Verify & finish"}
           </ShineButton>
           {error && <AlertMessage tone="error" style={{ marginBottom: 0 }}>{error}</AlertMessage>}
         </form>
@@ -365,22 +380,21 @@ export default function SignupPage() {
 
   return (
     <Shell
-      title="Create account"
-      subtitle="No password — you'll sign in with a passkey."
-      footer={signInFooter}
+      title="Move to passkeys"
+      subtitle="One-time sign-in for accounts from the password era."
+      footer={footer}
     >
-      {!needsInvite && (
-        <AlertMessage
-          tone="info"
-          icon={<MIcon name="celebration" size={16} style={{ flexShrink: 0, marginRight: 8, marginTop: 2 }} />}
-          className="mb-5"
-        >
-          Invites are open until {INVITE_FREE_LABEL}. You don&apos;t need a code, just pick a
-          username.
-        </AlertMessage>
-      )}
+      <AlertMessage
+        tone="info"
+        icon={<MIcon name="schedule" size={16} style={{ flexShrink: 0, marginRight: 8, marginTop: 2 }} />}
+        className="mb-5"
+      >
+        Password sign-in works here until {LEGACY_LOGIN_LABEL}. You&apos;ll create a passkey and
+        your mailbox switches to zero-access encryption — mail already in your inbox stays
+        readable, new mail is encrypted before it touches disk, and your password stops working.
+      </AlertMessage>
 
-      <form onSubmit={onBegin} className="space-y-4">
+      <form onSubmit={onPassword} className="space-y-4">
         <div>
           <label className="block text-[13px] font-medium text-[#f7f8f8] mb-2 pl-1" htmlFor="username">
             Username
@@ -390,50 +404,36 @@ export default function SignupPage() {
             name="username"
             disabled={busy}
             placeholder="you"
-            autoComplete="off"
+            autoComplete="username"
             autoCapitalize="off"
             autoCorrect="off"
             spellCheck={false}
-            data-lpignore="true"
-            data-1p-ignore="true"
             required
             fullWidth
             trailing={<span className="text-[13px] whitespace-nowrap">@{DOMAIN}</span>}
           />
         </div>
         <div>
-          <label
-            className={`block text-[13px] font-medium mb-2 pl-1 ${needsInvite ? "text-[#f7f8f8]" : "text-[#898e97]"}`}
-            htmlFor="invite"
-          >
-            Invite code{!needsInvite && " (not needed right now)"}
+          <label className="block text-[13px] font-medium text-[#f7f8f8] mb-2 pl-1" htmlFor="password">
+            Password
           </label>
           <TextInput
-            id="invite"
-            name="invite"
-            disabled={busy || !needsInvite}
-            placeholder={needsInvite ? "Invite code" : "Not needed until " + INVITE_FREE_LABEL}
-            autoComplete="off"
-            autoCapitalize="off"
-            autoCorrect="off"
-            spellCheck={false}
-            data-lpignore="true"
-            data-1p-ignore="true"
-            required={needsInvite}
+            id="password"
+            name="password"
+            type="password"
+            disabled={busy}
+            placeholder="••••••••"
+            // Unlike the old login form this WANTS the saved password offered —
+            // it's the whole point of the page.
+            autoComplete="current-password"
+            required
             fullWidth
-            leading={<MIcon name="confirmation_number" size={16} />}
+            leading={<MIcon name="key" size={16} />}
           />
         </div>
-
-        {SITE_KEY ? (
-          <Turnstile siteKey={SITE_KEY} />
-        ) : (
-          <p className="text-[12px] text-[#898e97] pl-1">(Turnstile not configured)</p>
-        )}
         {error && <AlertMessage tone="error" style={{ marginBottom: 0 }}>{error}</AlertMessage>}
-
         <ShineButton type="submit" disabled={busy} fullWidth>
-          {busy ? "Checking…" : "Continue"}
+          {busy ? "Checking…" : "Sign in & start migration"}
         </ShineButton>
       </form>
     </Shell>
