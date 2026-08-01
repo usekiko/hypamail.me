@@ -12,15 +12,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
+import { Instrument_Sans } from "next/font/google";
+import { Button, InputGroup } from "@heroui/react";
 import Turnstile from "../ui/Turnstile";
 import PasskeyHelp from "../ui/PasskeyHelp";
 import FirefoxNote from "../ui/FirefoxNote";
-import { ShineButton } from "@/components/ui/shine-button";
-import { SecondaryButton } from "@/components/ui/secondary-button";
-import { TextInput } from "@/components/ui/text-input";
 import { AlertMessage } from "@/components/ui/alert-message";
 import { MIcon } from "@/components/ui/material-icon";
-import { AuthColumn, AuthPanel } from "@/components/auth-panel";
+import { DarkAuthColumn, DarkAuthPanel } from "../ui/DarkAuthShell";
 import { inviteRequired, INVITE_FREE_LABEL } from "@/constants/invite";
 import {
   signupBegin,
@@ -39,9 +38,12 @@ import {
   webauthnGet,
   storeMailKey,
 } from "@/lib/client/crypto";
+import "../heroui.css";
 
 const DOMAIN = process.env.NEXT_PUBLIC_MAIL_DOMAIN || "hypamail.me";
 const SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "";
+
+const instrumentSans = Instrument_Sans({ subsets: ["latin"], weight: ["400", "500", "600", "700"] });
 
 // Every wizard step shares the split auth shell from main's login/signup pages.
 const Shell = ({
@@ -55,11 +57,11 @@ const Shell = ({
   footer: React.ReactNode;
   children: React.ReactNode;
 }) => (
-  <div className="flex min-h-screen bg-[#151515]">
-    <AuthColumn title={title} subtitle={subtitle} footer={footer}>
+  <div className={`${instrumentSans.className} heroui-scope bg-background flex min-h-screen`}>
+    <DarkAuthColumn title={title} subtitle={subtitle} footer={footer}>
       {children}
-    </AuthColumn>
-    <AuthPanel />
+    </DarkAuthColumn>
+    <DarkAuthPanel />
   </div>
 );
 
@@ -237,7 +239,7 @@ export default function SignupPage() {
   const signInFooter = (
     <>
       Already have an account?{" "}
-      <Link href="/login" className="text-[#f7f8f8] font-semibold hover:underline">
+      <Link href="/login" className="text-foreground font-semibold hover:underline">
         Sign in
       </Link>
     </>
@@ -250,14 +252,14 @@ export default function SignupPage() {
         subtitle={`${wiz?.begin.email} has no password.`}
         footer={signInFooter}
       >
-        <p className="text-[13px] text-[#898e97] leading-[1.6] m-0 mb-6">
+        <p className="text-sm text-muted leading-[1.6] m-0 mb-6">
           You sign in with a passkey — your fingerprint, face, or device PIN. Your browser
           will ask you to create one now.
         </p>
-        <ShineButton onClick={onCreatePasskey} disabled={busy} fullWidth>
+        <Button variant="primary" size="lg" onPress={onCreatePasskey} isDisabled={busy} fullWidth>
           <MIcon name="passkey" size={18} style={{ marginRight: 8 }} />
           {busy ? "Waiting for your device…" : "Create passkey"}
-        </ShineButton>
+        </Button>
         {error && <AlertMessage tone="error" style={{ marginTop: 12, marginBottom: 0 }}>{error}</AlertMessage>}
         <FirefoxNote />
         <PasskeyHelp />
@@ -272,9 +274,9 @@ export default function SignupPage() {
         subtitle="It will not be shown again."
         footer={signInFooter}
       >
-        <p className="text-[13px] text-[#898e97] leading-[1.6] m-0 mb-5">
+        <p className="text-sm text-muted leading-[1.6] m-0 mb-5">
           Write these 12 words down and keep them safe. They are the{" "}
-          <b className="text-[#f7f8f8]">only</b>{" "}
+          <b className="text-foreground">only</b>{" "}
           way back into your account if you lose your devices — and the only backup key to your
           mail. We can&apos;t reset or recover them.
         </p>
@@ -285,19 +287,19 @@ export default function SignupPage() {
           >
             {wiz.words.split(" ").map((w, i) => (
               <span key={i} className="flex gap-1.5" style={{ minWidth: 0 }}>
-                <span className="text-[#898e97] text-right" style={{ minWidth: "1.6em" }}>{i + 1}.</span>
-                <span className="text-[#f7f8f8]">{w}</span>
+                <span className="text-muted text-right" style={{ minWidth: "1.6em" }}>{i + 1}.</span>
+                <span className="text-foreground">{w}</span>
               </span>
             ))}
           </div>
         </div>
 
-        <SecondaryButton onClick={downloadRecoveryCode} fullWidth style={{ marginBottom: "1rem" }}>
+        <Button variant="outline" size="lg" onPress={downloadRecoveryCode} fullWidth style={{ marginBottom: "1rem" }}>
           <MIcon name="download" size={16} style={{ marginRight: 6 }} />
           {downloaded ? "Downloaded — download again" : "Download recovery code"}
-        </SecondaryButton>
+        </Button>
 
-        <label className="flex items-start gap-2 text-[13px] text-[#f7f8f8] mb-5 cursor-pointer">
+        <label className="flex items-start gap-2 text-sm text-foreground mb-5 cursor-pointer">
           <input
             type="checkbox"
             checked={wordsSaved}
@@ -306,11 +308,11 @@ export default function SignupPage() {
           />
           <span>I saved my recovery code. I understand it cannot be recovered for me.</span>
         </label>
-        <ShineButton disabled={!wordsSaved || !downloaded} onClick={() => setStep("totp")} fullWidth>
+        <Button variant="primary" size="lg" isDisabled={!wordsSaved || !downloaded} onPress={() => setStep("totp")} fullWidth>
           Continue
-        </ShineButton>
+        </Button>
         {!downloaded && (
-          <p className="text-[12px] text-[#898e97] mt-2.5 text-center">
+          <p className="text-xs text-muted mt-2.5 text-center">
             Download your recovery code to continue.
           </p>
         )}
@@ -325,39 +327,40 @@ export default function SignupPage() {
         subtitle="Scan this with an authenticator app (Aegis, Ente Auth, Google Authenticator…)."
         footer={signInFooter}
       >
-        <p className="text-[13px] text-[#898e97] leading-[1.6] m-0 mb-5">
+        <p className="text-sm text-muted leading-[1.6] m-0 mb-5">
           It protects account recovery: recovery needs your 12 words{" "}
-          <b className="text-[#f7f8f8]">and</b>{" "}
+          <b className="text-foreground">and</b>{" "}
           a code from this app. Use an authenticator with backups — losing both your passkeys and
           this app means the account is gone for good.
         </p>
         <div className="bg-white rounded-lg p-2.5 w-fit mx-auto mb-4">
           <canvas ref={qrRef} className="block" />
         </div>
-        <p className="text-[12px] text-[#898e97] m-0 mb-5 text-center">
+        <p className="text-xs text-muted m-0 mb-5 text-center">
           Can&apos;t scan? Enter manually:{" "}
-          <code className="select-all text-[#b9bec6]">{wiz.begin.totpSecret}</code>
+          <code className="select-all text-muted">{wiz.begin.totpSecret}</code>
         </p>
         <form onSubmit={onComplete} className="space-y-4">
           <div>
-            <label className="block text-[13px] font-medium text-[#f7f8f8] mb-2 pl-1">
+            <label className="block text-sm font-medium text-foreground mb-2 pl-1">
               6-digit code from the app
             </label>
-            <TextInput
-              inputMode="numeric"
-              pattern="[0-9]{6}"
-              maxLength={6}
-              placeholder="000000"
-              value={totpCode}
-              onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ""))}
-              required
-              fullWidth
-              style={{ fontFamily: "ui-monospace, monospace", letterSpacing: "0.3em", textAlign: "center" }}
-            />
+            <InputGroup fullWidth>
+              <InputGroup.Input
+                inputMode="numeric"
+                pattern="[0-9]{6}"
+                maxLength={6}
+                placeholder="000000"
+                value={totpCode}
+                onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ""))}
+                required
+                style={{ fontFamily: "ui-monospace, monospace", letterSpacing: "0.3em", textAlign: "center" }}
+              />
+            </InputGroup>
           </div>
-          <ShineButton type="submit" disabled={busy || totpCode.length !== 6} fullWidth>
+          <Button type="submit" variant="primary" size="lg" isDisabled={busy || totpCode.length !== 6} fullWidth>
             {busy ? "Creating account…" : "Verify & finish"}
-          </ShineButton>
+          </Button>
           {error && <AlertMessage tone="error" style={{ marginBottom: 0 }}>{error}</AlertMessage>}
         </form>
       </Shell>
@@ -384,58 +387,64 @@ export default function SignupPage() {
       <form onSubmit={onBegin} className="space-y-4">
         {error && <AlertMessage tone="error" style={{ marginBottom: 0 }}>{error}</AlertMessage>}
         <div>
-          <label className="block text-[13px] font-medium text-[#f7f8f8] mb-2 pl-1" htmlFor="username">
+          <label className="block text-sm font-medium text-foreground mb-2 pl-1" htmlFor="username">
             Username
           </label>
-          <TextInput
-            id="username"
-            name="username"
-            disabled={busy}
-            placeholder="you"
-            autoComplete="off"
-            autoCapitalize="off"
-            autoCorrect="off"
-            spellCheck={false}
-            data-lpignore="true"
-            data-1p-ignore="true"
-            required
-            fullWidth
-            trailing={<span className="text-[13px] whitespace-nowrap">@{DOMAIN}</span>}
-          />
+          <InputGroup fullWidth>
+            <InputGroup.Input
+              id="username"
+              name="username"
+              disabled={busy}
+              placeholder="you"
+              autoComplete="off"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
+              data-lpignore="true"
+              data-1p-ignore="true"
+              required
+            />
+            <InputGroup.Suffix>
+              <span className="text-sm whitespace-nowrap text-foreground/70">@{DOMAIN}</span>
+            </InputGroup.Suffix>
+          </InputGroup>
         </div>
         <div>
           <label
-            className={`block text-[13px] font-medium mb-2 pl-1 ${needsInvite ? "text-[#f7f8f8]" : "text-[#898e97]"}`}
+            className={`block text-sm font-medium mb-2 pl-1 ${needsInvite ? "text-foreground" : "text-muted"}`}
             htmlFor="invite"
           >
             Invite code{!needsInvite && " (not needed right now)"}
           </label>
-          <TextInput
-            id="invite"
-            name="invite"
-            disabled={busy || !needsInvite}
-            placeholder={needsInvite ? "Invite code" : "Not needed until " + INVITE_FREE_LABEL}
-            autoComplete="off"
-            autoCapitalize="off"
-            autoCorrect="off"
-            spellCheck={false}
-            data-lpignore="true"
-            data-1p-ignore="true"
-            required={needsInvite}
-            fullWidth
-            leading={<MIcon name="confirmation_number" size={16} />}
-          />
+          <InputGroup fullWidth>
+            <InputGroup.Prefix>
+              <MIcon name="confirmation_number" size={16} />
+            </InputGroup.Prefix>
+            <InputGroup.Input
+              id="invite"
+              name="invite"
+              disabled={busy || !needsInvite}
+              placeholder={needsInvite ? "Invite code" : "Not needed until " + INVITE_FREE_LABEL}
+              autoComplete="off"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
+              data-lpignore="true"
+              data-1p-ignore="true"
+              required={needsInvite}
+            />
+          </InputGroup>
         </div>
 
         {SITE_KEY ? (
           <Turnstile siteKey={SITE_KEY} />
         ) : (
-          <p className="text-[12px] text-[#898e97] pl-1">(Turnstile not configured)</p>
+          <p className="text-xs text-muted pl-1">(Turnstile not configured)</p>
         )}
 
-        <ShineButton type="submit" disabled={busy} fullWidth>
+        <Button type="submit" variant="primary" size="lg" isDisabled={busy} fullWidth>
           {busy ? "Checking…" : "Continue"}
-        </ShineButton>
+        </Button>
       </form>
     </Shell>
   );

@@ -1,0 +1,51 @@
+@import "tailwindcss";
+@import "@heroui/styles";
+
+/* Scoped via .heroui-scope -- imported from the landing, login, and signup
+   pages, never the root layout, so none of this reaches /mail or /recover.
+
+   The five properties below share a name with tokens already declared
+   globally in app/globals.css (:root, unlayered) for the rest of the site.
+   Unlayered rules always beat HeroUI's layered ones, so without this override
+   those global values would leak into every HeroUI component here — e.g. the
+   shared --muted is a near-black *background* shade, but HeroUI reads --muted
+   as muted *text* color, which would be illegible on a dark surface. Restated
+   here to HeroUI's own dark-theme defaults, plus pitch black. Accent stays
+   HeroUI's default (blue) rather than a custom color, since --accent-hover,
+   --accent-soft*, and --focus are only ever computed against --accent at the
+   html level (.dark), not re-derived per element, so a partial override here
+   split the button's resting/hover/focus colors apart. */
+.heroui-scope {
+  --background: #000000;
+  --foreground: oklch(0.9911 0 0);
+  --border: oklch(28% 0.006 286.033);
+  --muted: oklch(70.5% 0.015 286.067);
+  --radius: 0.5rem;
+
+  /* Both of these are declared by HeroUI only on :root (its .dark block never
+     restates them) and are defined in terms of tokens we shadow above. A
+     var() inside a custom property is substituted on the element the
+     declaration sits on, so they resolve against <html> -- where globals.css's
+     unlayered :root wins -- and then inherit down as already-computed literals.
+     Re-declaring --muted/--radius here therefore can't reach them; they have
+     to be restated so they re-substitute against this scope's own values.
+       --field-placeholder picked up --muted: #111 (a near-black *background*
+     shade for the rest of the app), painting placeholder text and the
+     prefix/suffix icons black-on-black.
+       --field-radius picked up --radius: 12px, making fields 18px-round
+     instead of the 12px HeroUI derives from its own 0.5rem. */
+  --field-placeholder: var(--muted);
+  --field-radius: calc(var(--radius) * 1.5);
+}
+
+/* app/globals.css sets html/body to 14px site-wide (the rest of the app is
+   styled in absolute px, so it never mattered there). `rem` is always relative
+   to the root element no matter how deep it's used, so every rem-based
+   Tailwind class on a page using .heroui-scope -- including inside HeroUI's
+   own compiled component CSS (button, card, chip all size themselves in rem)
+   -- was quietly rendering ~12% smaller than HeroUI intends. :has() scopes
+   the reset to only documents that actually contain .heroui-scope, so other
+   pages keep their 14px root untouched. */
+html:has(.heroui-scope) {
+  font-size: 16px;
+}
