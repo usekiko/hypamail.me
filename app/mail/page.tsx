@@ -31,9 +31,11 @@ export default async function Inbox() {
 
       {error && <AlertMessage tone="error">{error}</AlertMessage>}
 
+      {/* EmptyState ships as bare padding/type, so the centring is ours. The
+          icon is desktop-only: on a phone the bare line reads better. */}
       {!error && mail.length === 0 && (
-        <EmptyState className="gap-3 py-14 text-muted">
-          <MIcon name="inbox" size={32} />
+        <EmptyState className="flex flex-col items-center justify-center gap-3 py-20 text-center sm:py-14">
+          <MIcon name="inbox" size={32} className="hidden sm:block" />
           <span>No messages yet.</span>
         </EmptyState>
       )}

@@ -36,13 +36,17 @@ export default async function Home() {
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-40 bg-[linear-gradient(to_bottom,transparent,var(--background))]" />
 
         <div className="relative z-10 mx-auto flex w-full flex-col items-center px-6 text-center">
-          <h1 className="whitespace-nowrap text-[clamp(15px,4.2vw,52px)] font-semibold tracking-tight text-white [text-shadow:0_2px_24px_rgba(0,0,0,0.6)]">
+          {/* The single-line headline is a desktop rule. Holding it to one line
+              on a phone would size it off the viewport width (~15px at 375px),
+              smaller than the body copy under it, so below sm it wraps and is
+              sized in its own right. */}
+          <h1 className="text-[clamp(28px,8.5vw,36px)] font-semibold tracking-tight text-balance text-white [text-shadow:0_2px_24px_rgba(0,0,0,0.6)] sm:whitespace-nowrap sm:text-[clamp(24px,4.6vw,52px)]">
             Finally, an inbox that <span className="text-white/50 underline">shuts up</span>
           </h1>
-          <p className="mt-2 max-w-[480px] text-base leading-relaxed text-white/60">
+          <p className="mt-3 max-w-[480px] text-base leading-relaxed text-white/60 sm:mt-2">
             Grab a <span className="text-white/80">@{DOMAIN}</span> and start using it today
           </p>
-          <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
+          <div className="mt-8 flex w-full max-w-[320px] flex-col items-stretch gap-3 sm:mt-9 sm:w-auto sm:max-w-none sm:flex-row sm:items-center sm:justify-center">
             <Link href="/signup" className={buttonVariants({ variant: "primary", size: "lg" })}>
               Create your address
             </Link>

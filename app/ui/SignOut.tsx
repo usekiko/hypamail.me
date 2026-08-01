@@ -14,11 +14,13 @@ export default function SignOut() {
       onSubmit={() => {
         clearMailKey();
       }}
-      className="flex"
+      className="flex shrink-0"
     >
-      <Button type="submit" variant="outline" size="sm">
-        <MIcon name="logout" size={16} style={{ marginRight: 6 }} />
-        Sign out
+      {/* Label collapses to just the icon on a phone so the address beside it
+          keeps room to breathe. */}
+      <Button type="submit" variant="outline" size="sm" aria-label="Sign out">
+        <MIcon name="logout" size={16} className="sm:mr-1.5" />
+        <span className="hidden sm:inline">Sign out</span>
       </Button>
     </form>
   );
