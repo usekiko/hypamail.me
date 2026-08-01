@@ -19,7 +19,7 @@ import PasskeyHelp from "../ui/PasskeyHelp";
 import FirefoxNote from "../ui/FirefoxNote";
 import { AlertMessage } from "@/components/ui/alert-message";
 import { MIcon } from "@/components/ui/material-icon";
-import { DarkAuthColumn, DarkAuthPanel } from "../ui/DarkAuthShell";
+import { DarkAuthColumn } from "../ui/DarkAuthShell";
 import { inviteRequired, INVITE_FREE_LABEL } from "@/constants/invite";
 import {
   signupBegin,
@@ -45,7 +45,7 @@ const SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "";
 
 const instrumentSans = Instrument_Sans({ subsets: ["latin"], weight: ["400", "500", "600", "700"] });
 
-// Every wizard step shares the split auth shell from main's login/signup pages.
+// Every wizard step shares the same centred auth shell as the login page.
 const Shell = ({
   title,
   subtitle,
@@ -61,7 +61,6 @@ const Shell = ({
     <DarkAuthColumn title={title} subtitle={subtitle} footer={footer}>
       {children}
     </DarkAuthColumn>
-    <DarkAuthPanel />
   </div>
 );
 
