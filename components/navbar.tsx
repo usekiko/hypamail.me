@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ShineLink, SecondaryLink } from "@/components/ui/link-button";
+import { buttonVariants } from "@heroui/react";
 
 /**
  * The page's content width. The navbar pill and the sections below it must use
@@ -9,11 +9,11 @@ import { ShineLink, SecondaryLink } from "@/components/ui/link-button";
  */
 export const PAGE_WIDTH = "max-w-[1100px]";
 
-/** Floating pill navbar, matching hypastack's. Fixed, so give the page top padding. */
+/** Floating pill navbar. Fixed, so give the page top padding. */
 export function Navbar() {
   return (
     <header
-      className={`fixed z-[9999] top-3 sm:top-4 left-0 right-0 mx-auto w-[calc(100%-1.5rem)] ${PAGE_WIDTH} bg-[rgba(8,9,10,0.55)] backdrop-blur-2xl rounded-2xl border border-[rgba(255,255,255,0.08)] py-2 px-4 sm:px-5`}
+      className={`fixed z-[9999] top-3 sm:top-4 left-0 right-0 mx-auto w-[calc(100%-1.5rem)] ${PAGE_WIDTH} bg-surface/70 backdrop-blur-2xl rounded-2xl border border-border py-2 px-4 sm:px-5`}
     >
       <div className="w-full flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2.5 group">
@@ -27,12 +27,12 @@ export function Navbar() {
           />
         </Link>
         <div className="flex items-center gap-2">
-          <SecondaryLink href="/login" size="sm">
+          <Link href="/login" className={buttonVariants({ variant: "outline", size: "sm" })}>
             Sign in
-          </SecondaryLink>
-          <ShineLink href="/signup" size="sm">
+          </Link>
+          <Link href="/signup" className={buttonVariants({ variant: "primary", size: "sm" })}>
             Create address
-          </ShineLink>
+          </Link>
         </div>
       </div>
     </header>

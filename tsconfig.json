@@ -38,6 +38,17 @@
     ".next\\dev/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    // Beams.tsx imports @react-three/fiber, which globally augments
+    // JSX.IntrinsicElements with every Three.js element the moment it's part
+    // of the program -- and since **/*.tsx below sweeps it in as a root file
+    // regardless of who imports it, that's unavoidable unless it's excluded
+    // here. That huge intrinsics union broke `children` typing on unrelated
+    // polymorphic components (components/ui/shine-button.tsx,
+    // secondary-button.tsx's `as` prop). It's loaded at runtime via
+    // app/ui/BeamsClient.tsx's dynamic import, which routes the specifier
+    // through a plain `string`-typed constant so TS's reachable-via-import
+    // exception to `exclude` doesn't pull it back in either.
+    "app/ui/Beams.tsx"
   ]
 }
