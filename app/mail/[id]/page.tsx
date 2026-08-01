@@ -67,7 +67,7 @@ export default async function ReadPage({ params }: { params: Promise<{ id: strin
       </div>
       <p style={{ color: "var(--muted-foreground)", fontSize: "12px", marginTop: "8px", display: "flex", alignItems: "flex-start", gap: "6px" }}>
         <MIcon name="lock" size={14} style={{ marginTop: "2px" }} />
-        <span>This message is stored encrypted — it was decrypted just now, on your device.
+        <span>This message is stored encrypted. It was decrypted just now, on your device.
         Images, scripts, and all remote content are stripped, which blocks tracking pixels
         and malicious code. Messages may look plainer than in other mail apps.</span>
       </p>

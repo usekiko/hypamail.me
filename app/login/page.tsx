@@ -36,7 +36,7 @@ type Phase = "idle" | "totp" | "words";
 const TITLES: Record<Phase, { title: string; subtitle: string }> = {
   idle: {
     title: "Sign in",
-    subtitle: "No passwords here — your passkey signs you in and decrypts your mail.",
+    subtitle: "No passwords here. Your passkey signs you in and decrypts your mail.",
   },
   totp: { title: "One more step", subtitle: "Enter the code from your authenticator app." },
   words: { title: "Unlock your mail", subtitle: "One-time step for this browser." },
@@ -94,7 +94,7 @@ export default function LoginPage() {
   function assertionError(err: unknown) {
     setError(
       err instanceof DOMException && err.name === "NotAllowedError"
-        ? "Sign-in was cancelled, or no passkey was offered — if yours is on your phone or a security key, use the option below."
+        ? "Sign-in was cancelled, or no passkey was offered. If yours is on your phone or a security key, use the option below."
         : "Couldn't reach a passkey here. Try the option below, or account recovery."
     );
   }

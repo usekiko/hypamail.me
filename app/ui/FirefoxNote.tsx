@@ -31,7 +31,7 @@ export default function FirefoxNote() {
       style={{ marginTop: "1rem", marginBottom: 0, fontSize: 13 }}
     >
       <b>Firefox can&apos;t show the QR code</b> for signing in with a passkey on your phone
-      {isLinux ? " — on Linux it only supports USB security keys" : ""}. Open hypamail in{" "}
+      {isLinux ? " (on Linux it only supports USB security keys)" : ""}. Open hypamail in{" "}
       <b>Chrome or Brave</b> to use your phone, plug in a security key, or use your recovery
       code.
     </AlertMessage>

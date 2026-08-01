@@ -97,10 +97,10 @@ export default function RecoverPage() {
     } catch (err) {
       setError(
         err instanceof DOMException && err.name === "InvalidStateError"
-          ? "This device already has a passkey for your account — just continue to your inbox."
+          ? "This device already has a passkey for your account. Just continue to your inbox."
           : err instanceof DOMException && err.name === "NotAllowedError"
             ? "Passkey creation was cancelled."
-            : "This browser couldn't create a passkey — you can still continue to your inbox."
+            : "This browser couldn't create a passkey. You can still continue to your inbox."
       );
     } finally {
       setBusy(false);
@@ -147,7 +147,7 @@ export default function RecoverPage() {
             </ShineButton>
           </form>
           <SecondaryLink href="/mail" fullWidth style={{ marginTop: "0.75rem" }}>
-            Skip — go to inbox
+            Skip, go to inbox
           </SecondaryLink>
           {error && <AlertMessage tone="error" style={{ marginTop: 12, marginBottom: 0 }}>{error}</AlertMessage>}
           <PasskeyHelp />

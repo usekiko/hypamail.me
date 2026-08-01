@@ -157,7 +157,7 @@ export default function RecoveryWordsInput({
             onFocus={() => setFocused(i)}
             onBlur={() => setFocused((f) => (f === i ? null : f))}
             disabled={disabled}
-            title={isBad(i) ? "Not a word from the recovery list — check for a typo." : undefined}
+            title={isBad(i) ? "Not a word from the recovery list. Check for a typo." : undefined}
             autoComplete="off"
             autoCapitalize="none"
             autoCorrect="off"

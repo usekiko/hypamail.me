@@ -99,16 +99,16 @@ export function recoveryWordsError(words: string): string | null {
   if (bad.length) {
     const nums = bad.map((i) => i + 1).join(", ");
     return bad.length === 1
-      ? `Word ${nums} isn't from the recovery word list — check it for a typo.`
-      : `Words ${nums} aren't from the recovery word list — check them for typos.`;
+      ? `Word ${nums} isn't from the recovery word list. Check it for a typo.`
+      : `Words ${nums} aren't from the recovery word list. Check them for typos.`;
   }
   const filled = normalizeWords(words).split(" ").filter(Boolean);
   if (filled.length < 12) {
-    return `Enter all 12 words — ${filled.length} of 12 so far.`;
+    return `Enter all 12 words, ${filled.length} of 12 so far.`;
   }
   if (!recoveryWordsValid(words)) {
     // Every word is real but the checksum fails: usually a swapped/wrong word.
-    return "These 12 words aren't a valid recovery code — check the spelling and the order.";
+    return "These 12 words aren't a valid recovery code. Check the spelling and the order.";
   }
   return null;
 }

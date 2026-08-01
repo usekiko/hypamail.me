@@ -180,7 +180,7 @@ export default function SignupPage() {
     } catch (err) {
       setError(
         err instanceof DOMException && err.name === "NotAllowedError"
-          ? "Passkey creation was cancelled — try again."
+          ? "Passkey creation was cancelled. Try again."
           : "This browser couldn't create a passkey. Try Chrome/Edge/Safari, or a password manager like Bitwarden."
       );
     } finally {
@@ -252,7 +252,7 @@ export default function SignupPage() {
         footer={signInFooter}
       >
         <p className="text-sm text-muted leading-[1.6] m-0 mb-6">
-          You sign in with a passkey — your fingerprint, face, or device PIN. Your browser
+          You sign in with a passkey: your fingerprint, face, or device PIN. Your browser
           will ask you to create one now.
         </p>
         <Button variant="primary" size="lg" onPress={onCreatePasskey} isDisabled={busy} fullWidth>
@@ -276,7 +276,7 @@ export default function SignupPage() {
         <p className="text-sm text-muted leading-[1.6] m-0 mb-5">
           Write these 12 words down and keep them safe. They are the{" "}
           <b className="text-foreground">only</b>{" "}
-          way back into your account if you lose your devices — and the only backup key to your
+          way back into your account if you lose your devices, and the only backup key to your
           mail. We can&apos;t reset or recover them.
         </p>
         <div className="panel mb-4 select-all" style={{ padding: 14 }}>
@@ -295,7 +295,7 @@ export default function SignupPage() {
 
         <Button variant="outline" size="lg" onPress={downloadRecoveryCode} fullWidth style={{ marginBottom: "1rem" }}>
           <MIcon name="download" size={16} style={{ marginRight: 6 }} />
-          {downloaded ? "Downloaded — download again" : "Download recovery code"}
+          {downloaded ? "Downloaded, download again" : "Download recovery code"}
         </Button>
 
         <label className="flex items-start gap-2 text-sm text-foreground mb-5 cursor-pointer">
@@ -329,7 +329,7 @@ export default function SignupPage() {
         <p className="text-sm text-muted leading-[1.6] m-0 mb-5">
           It protects account recovery: recovery needs your 12 words{" "}
           <b className="text-foreground">and</b>{" "}
-          a code from this app. Use an authenticator with backups — losing both your passkeys and
+          a code from this app. Use an authenticator with backups. Losing both your passkeys and
           this app means the account is gone for good.
         </p>
         <div className="bg-white rounded-lg p-2.5 w-fit mx-auto mb-4">
@@ -369,7 +369,7 @@ export default function SignupPage() {
   return (
     <Shell
       title="Create account"
-      subtitle="No password — you'll sign in with a passkey."
+      subtitle="No password, you'll sign in with a passkey."
       footer={signInFooter}
     >
       {!needsInvite && (

@@ -45,14 +45,14 @@ export default function Unlock({ onUnlocked }: { onUnlocked: (key: string) => vo
       if (!got.prfOutput || !cred?.wrappedKeyPrf) {
         setError(
           !got.prfOutput
-            ? "This passkey/browser can't derive the unlock key — use your recovery words below."
-            : "This passkey has no stored key yet — unlock with your recovery words once, then it will."
+            ? "This passkey/browser can't derive the unlock key. Use your recovery words below."
+            : "This passkey has no stored key yet. Unlock with your recovery words once, then it will."
         );
         return;
       }
       done(await unwrapWithPrf(got.prfOutput, cred.wrappedKeyPrf));
     } catch {
-      setError("Passkey unlock failed — try your recovery words.");
+      setError("Passkey unlock failed. Try your recovery words.");
     } finally {
       setBusy(false);
     }

@@ -219,7 +219,7 @@ export default function SettingsPage() {
           ? "This device already has a passkey for your account."
           : err instanceof DOMException && err.name === "NotAllowedError"
             ? "Passkey creation was cancelled."
-            : "This browser couldn't create a passkey — see the help below."
+            : "This browser couldn't create a passkey. See the help below."
       );
     } finally {
       setBusy(false);
@@ -370,8 +370,8 @@ export default function SettingsPage() {
               icon={<MIcon name="info" size={16} style={{ flexShrink: 0, marginRight: 8, marginTop: 2 }} />}
               style={{ fontSize: 12 }}
             >
-              Adding a passkey <b>won&apos;t reset your recovery code or your authenticator</b>
-              {" "}— both stay exactly as they are. You&apos;re only entering them here to prove
+              Adding a passkey <b>won&apos;t reset your recovery code or your authenticator</b>.
+              Both stay exactly as they are. You&apos;re only entering them here to prove
               it&apos;s you.
             </AlertMessage>
             <GateForm
@@ -408,8 +408,8 @@ export default function SettingsPage() {
       <div className="panel" style={{ padding: "16px", marginTop: "12px" }}>
         <b style={{ fontSize: "14px" }}>Two-factor on sign-in</b>
         <p style={{ color: "var(--muted-foreground)", fontSize: "13px", margin: "0.5rem 0 1rem", lineHeight: 1.6 }}>
-          A passkey already counts as two factors — the device plus your fingerprint, face or PIN
-          — so by default your original passkey signs you in with one tap. Turn this on to also
+          A passkey already counts as two factors: the device plus your fingerprint, face or PIN.
+          So by default your original passkey signs you in with one tap. Turn this on to also
           require a code from your authenticator app every single time. Passkeys you added later
           always ask for a code, whatever this is set to.
         </p>
@@ -440,7 +440,7 @@ export default function SettingsPage() {
         {mode.kind === "totp-on" && (
           <form onSubmit={onToggleTotp} style={{ display: "flex", flexDirection: "column", gap: "0.75rem", marginTop: "0.75rem" }}>
             <p style={{ color: "var(--muted-foreground)", fontSize: "13px", margin: 0, lineHeight: 1.6 }}>
-              Enter a code from your authenticator to confirm it works — otherwise turning this on
+              Enter a code from your authenticator to confirm it works. Otherwise turning this on
               could lock you out of every future sign-in.
             </p>
             <TextInput

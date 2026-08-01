@@ -193,7 +193,7 @@ export async function signupComplete(payload: {
 }): Promise<SignupCompleteResult> {
   const ceremony = await takeCeremony("signup");
   if (!ceremony?.username || !ceremony.totpSecret) {
-    return { error: "Signup session expired — please start over.", fatal: true };
+    return { error: "Signup session expired. Please start over.", fatal: true };
   }
   const { username, totpSecret } = ceremony;
   const invite = ceremony.invite ?? "";
@@ -219,7 +219,7 @@ export async function signupComplete(payload: {
   // the wizard.
   if (!verifyTotp(totpSecret, payload.totpCode)) {
     await recordAttempt(ipHash, "signup");
-    return { error: "Wrong authenticator code — signup restarted for safety.", fatal: true };
+    return { error: "Wrong authenticator code. Signup restarted for safety.", fatal: true };
   }
 
   const cred = await verifyRegistration(
@@ -228,7 +228,7 @@ export async function signupComplete(payload: {
   );
   if (!cred) {
     await recordAttempt(ipHash, "signup");
-    return { error: "Passkey could not be verified — please start over.", fatal: true };
+    return { error: "Passkey could not be verified. Please start over.", fatal: true };
   }
 
   if ((await usernameExists(username)) || (await usernameTaken(username))) {
@@ -357,7 +357,7 @@ export async function loginComplete(payload: {
   assertion: unknown;
 }): Promise<LoginCompleteResult> {
   const ceremony = await takeCeremony("login");
-  if (!ceremony) return { error: "Login session expired — try again." };
+  if (!ceremony) return { error: "Login session expired. Try again." };
 
   const assertion = payload.assertion as AuthenticationResponseJSON;
   const credential = await getCredential(assertion.id);
@@ -405,7 +405,7 @@ export async function loginTotp(payload: {
 }): Promise<LoginCompleteResult> {
   const ceremony = await takeCeremony("login-totp");
   if (!ceremony?.userId || !ceremony.credentialId) {
-    return { error: "Login session expired — start again." };
+    return { error: "Login session expired. Start again." };
   }
 
   const ipHash = await clientIpHash();
@@ -422,7 +422,7 @@ export async function loginTotp(payload: {
   const user = await getUserById(ceremony.userId);
   const credential = await getCredential(ceremony.credentialId);
   if (!user || !credential || credential.userId !== user.id) {
-    return { error: "Login session expired — start again." };
+    return { error: "Login session expired. Start again." };
   }
 
   if (!verifyTotp(decryptSecret(user.totpSecretEnc), payload.totpCode)) {
@@ -512,7 +512,7 @@ export async function legacyLoginBegin(payload: {
   password: string;
 }): Promise<SignupBeginResult> {
   if (!legacyLoginAvailable()) {
-    return { error: `Password sign-in ended on ${LEGACY_LOGIN_LABEL} — see /login/legacy for what to do.` };
+    return { error: `Password sign-in ended on ${LEGACY_LOGIN_LABEL}. See /login/legacy for what to do.` };
   }
   // Accept "user" or "user@domain", like the old password form did.
   const username = String(payload.username || "").trim().toLowerCase().split("@")[0];
@@ -529,7 +529,7 @@ export async function legacyLoginBegin(payload: {
   // the password so a migrated user with a saved password gets pointed the
   // right way instead of a confusing "wrong password".
   if (await usernameExists(username)) {
-    return { error: "This account already moved to passkeys — use the normal sign-in." };
+    return { error: "This account already moved to passkeys. Use the normal sign-in." };
   }
 
   let accountId: string | null;
@@ -572,7 +572,7 @@ export async function legacyMigrateComplete(payload: {
 }): Promise<SignupCompleteResult> {
   const ceremony = await takeCeremony("legacy");
   if (!ceremony?.username || !ceremony.totpSecret || !ceremony.legacyPassword) {
-    return { error: "Migration session expired — please start over.", fatal: true };
+    return { error: "Migration session expired. Please start over.", fatal: true };
   }
   if (!legacyLoginAvailable()) {
     return { error: "The migration window has closed.", fatal: true };
@@ -597,7 +597,7 @@ export async function legacyMigrateComplete(payload: {
   // signupComplete: a wrong code restarts the wizard (and re-proves the password).
   if (!verifyTotp(totpSecret, payload.totpCode)) {
     await recordAttempt(ipHash, "legacy");
-    return { error: "Wrong authenticator code — migration restarted for safety.", fatal: true };
+    return { error: "Wrong authenticator code. Migration restarted for safety.", fatal: true };
   }
 
   const cred = await verifyRegistration(
@@ -606,12 +606,12 @@ export async function legacyMigrateComplete(payload: {
   );
   if (!cred) {
     await recordAttempt(ipHash, "legacy");
-    return { error: "Passkey could not be verified — please start over.", fatal: true };
+    return { error: "Passkey could not be verified. Please start over.", fatal: true };
   }
 
   // Double-submit / parallel-tab race: someone finished this migration already.
   if (await usernameExists(username)) {
-    return { error: "This account already moved to passkeys — use the normal sign-in.", fatal: true };
+    return { error: "This account already moved to passkeys. Use the normal sign-in.", fatal: true };
   }
 
   // Ordered so every failure before the rotation leaves the account exactly as
@@ -796,7 +796,7 @@ export async function addPasskeyComplete(payload: {
   if (!session) return { error: "Not signed in." };
   const ceremony = await takeCeremony("add-passkey");
   if (!ceremony || ceremony.userId !== session.userId) {
-    return { error: "Ceremony expired — try again." };
+    return { error: "Ceremony expired. Try again." };
   }
   // Re-check the cap at commit time (guards a double-submit race).
   if ((await countCredentialsForUser(session.userId)) >= MAX_PASSKEYS) {
