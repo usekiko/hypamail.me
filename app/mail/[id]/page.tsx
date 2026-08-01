@@ -1,9 +1,9 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { getSession } from "@/lib/session";
 import { getEmailMeta, markSeen } from "@/lib/jmap";
 import { deleteEmailAction } from "../actions";
-import { SecondaryButton } from "@/components/ui/secondary-button";
-import { SecondaryLink } from "@/components/ui/link-button";
+import { Button, Card, buttonVariants } from "@heroui/react";
 import { AlertMessage } from "@/components/ui/alert-message";
 import { MIcon } from "@/components/ui/material-icon";
 import MessageBody from "../MessageBody";
@@ -31,17 +31,17 @@ export default async function ReadPage({ params }: { params: Promise<{ id: strin
 
   return (
     <article>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem", marginBottom: "12px" }}>
-        <SecondaryLink href="/mail" variant="ghost" size="sm">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <Link href="/mail" className={buttonVariants({ variant: "ghost", size: "sm" })}>
           <MIcon name="arrow_back" size={16} style={{ marginRight: 6 }} />
           Inbox
-        </SecondaryLink>
-        <form action={deleteEmailAction} style={{ display: "flex" }}>
+        </Link>
+        <form action={deleteEmailAction} className="flex">
           <input type="hidden" name="id" value={mail.id} />
-          <SecondaryButton type="submit" size="sm" danger>
+          <Button type="submit" variant="danger-soft" size="sm">
             <MIcon name="delete" size={16} style={{ marginRight: 6 }} />
             Delete
-          </SecondaryButton>
+          </Button>
         </form>
       </div>
 
@@ -51,21 +51,27 @@ export default async function ReadPage({ params }: { params: Promise<{ id: strin
         </AlertMessage>
       )}
 
-      <div className="panel" style={{ padding: "16px", marginBottom: "10px" }}>
-        <h1 style={{ fontSize: "1.15rem", margin: "0 0 0.6rem", fontWeight: 600, letterSpacing: "-0.02em" }}>{mail.subject || "(no subject)"}</h1>
-        <div style={{ display: "flex", justifyContent: "space-between", color: "var(--muted-foreground)", fontSize: "13px", flexWrap: "wrap", gap: "0.5rem" }}>
-          <span>
-            <span style={{ color: "var(--foreground)", fontWeight: 500 }}>{from ? from.name || from.email : "(unknown)"}</span>
-            {from?.name && <span> &lt;{from.email}&gt;</span>}
-          </span>
-          <span>{new Date(mail.receivedAt).toLocaleString()}</span>
-        </div>
-      </div>
+      <Card className="mb-2.5">
+        <Card.Header>
+          <Card.Title className="m-0 text-[1.15rem] font-semibold tracking-tight">
+            {mail.subject || "(no subject)"}
+          </Card.Title>
+          <Card.Description className="mt-2.5 flex flex-wrap justify-between gap-2 text-[13px] text-muted">
+            <span>
+              <span className="font-medium text-foreground">{from ? from.name || from.email : "(unknown)"}</span>
+              {from?.name && <span> &lt;{from.email}&gt;</span>}
+            </span>
+            <span>{new Date(mail.receivedAt).toLocaleString()}</span>
+          </Card.Description>
+        </Card.Header>
+      </Card>
 
-      <div className="panel" style={{ padding: "16px", lineHeight: 1.6, overflowWrap: "anywhere" }}>
-        <MessageBody emailId={mail.id} />
-      </div>
-      <p style={{ color: "var(--muted-foreground)", fontSize: "12px", marginTop: "8px", display: "flex", alignItems: "flex-start", gap: "6px" }}>
+      <Card>
+        <Card.Content className="leading-relaxed [overflow-wrap:anywhere]">
+          <MessageBody emailId={mail.id} />
+        </Card.Content>
+      </Card>
+      <p className="mt-2 flex items-start gap-1.5 text-xs text-muted">
         <MIcon name="lock" size={14} style={{ marginTop: "2px" }} />
         <span>This message is stored encrypted. It was decrypted just now, on your device.
         Images, scripts, and all remote content are stripped, which blocks tracking pixels

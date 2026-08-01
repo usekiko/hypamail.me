@@ -4,7 +4,7 @@
 // session is revoked — otherwise the key would linger in sessionStorage.
 import { logoutAction } from "../actions";
 import { clearMailKey } from "@/lib/client/crypto";
-import { SecondaryButton } from "@/components/ui/secondary-button";
+import { Button } from "@heroui/react";
 import { MIcon } from "@/components/ui/material-icon";
 
 export default function SignOut() {
@@ -14,12 +14,12 @@ export default function SignOut() {
       onSubmit={() => {
         clearMailKey();
       }}
-      style={{ display: "flex" }}
+      className="flex"
     >
-      <SecondaryButton type="submit" size="sm" title="Sign out">
+      <Button type="submit" variant="outline" size="sm">
         <MIcon name="logout" size={16} style={{ marginRight: 6 }} />
         Sign out
-      </SecondaryButton>
+      </Button>
     </form>
   );
 }
