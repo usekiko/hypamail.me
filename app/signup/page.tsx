@@ -17,7 +17,6 @@ import { Button, InputGroup } from "@heroui/react";
 import Turnstile from "../ui/Turnstile";
 import PasskeyHelp from "../ui/PasskeyHelp";
 import FirefoxNote from "../ui/FirefoxNote";
-import { SecondaryButton } from "@/components/ui/secondary-button";
 import { AlertMessage } from "@/components/ui/alert-message";
 import { MIcon } from "@/components/ui/material-icon";
 import { DarkAuthColumn } from "../ui/DarkAuthShell";
@@ -331,18 +330,21 @@ export default function SignupPage() {
         </Button>
 
         {!usePassword ? (
-          <SecondaryButton
+          <Button
             type="button"
-            onClick={() => {
+            variant="outline"
+            size="lg"
+            onPress={() => {
               setError(null);
               setUsePassword(true);
             }}
-            disabled={busy}
-            style={{ marginTop: 12, width: "100%" }}
+            isDisabled={busy}
+            fullWidth
+            style={{ marginTop: 12 }}
           >
             <MIcon name="password" size={18} style={{ marginRight: 8 }} />
             Use a password instead
-          </SecondaryButton>
+          </Button>
         ) : (
           <div className="mt-4 flex flex-col gap-3">
             <div>
@@ -399,19 +401,22 @@ export default function SignupPage() {
           </div>
         )}
 
-        <SecondaryButton
+        <Button
           type="button"
-          onClick={() => {
+          variant="outline"
+          size="lg"
+          onPress={() => {
             setUsePassword(false);
             setPassword("");
             setPassword2("");
             onContinueWithoutPasskey(false);
           }}
-          disabled={busy}
-          style={{ marginTop: 12, width: "100%" }}
+          isDisabled={busy}
+          fullWidth
+          style={{ marginTop: 12 }}
         >
           Skip for now — use my recovery code
-        </SecondaryButton>
+        </Button>
 
         {error && <AlertMessage tone="error" style={{ marginTop: 12, marginBottom: 0 }}>{error}</AlertMessage>}
         <FirefoxNote />
@@ -514,14 +519,16 @@ export default function SignupPage() {
           <Button type="submit" variant="primary" size="lg" isDisabled={busy || totpCode.length !== 6} fullWidth>
             {busy ? "Creating account…" : "Verify & finish"}
           </Button>
-          <SecondaryButton
+          <Button
             type="button"
-            onClick={() => onComplete(null, false)}
-            disabled={busy}
-            style={{ width: "100%" }}
+            variant="outline"
+            size="lg"
+            onPress={() => onComplete(null, false)}
+            isDisabled={busy}
+            fullWidth
           >
             Skip — finish without 2FA
-          </SecondaryButton>
+          </Button>
           {error && <AlertMessage tone="error" style={{ marginBottom: 0 }}>{error}</AlertMessage>}
         </form>
       </Shell>
