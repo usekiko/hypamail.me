@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Button, Card, Chip } from "@heroui/react";
+import { Button, Chip } from "@heroui/react";
 import { Alert } from "../../ui/Alert";
 import { MIcon } from "@/components/ui/material-icon";
 import AuthenticatorSetup from "./AuthenticatorSetup";
@@ -47,60 +47,58 @@ export default function AuthenticatorCard({
   }
 
   return (
-    <Card className="mt-3">
-      <Card.Content>
-        <b className="text-sm">Authenticator app</b>
-        <p className="mt-2 mb-4 text-[13px] leading-relaxed text-muted">
-          A six-digit code from an app like Aegis, Ente Auth or 1Password. Optional — a passkey
-          already proves both the device and you. It&apos;s asked for on password sign-in, on
-          recovery, and on any passkey you added after signup.
-        </p>
+    <section className="mt-8 border-t border-border pt-8">
+      <b className="text-sm">Authenticator app</b>
+      <p className="mt-2 mb-4 text-[13px] leading-relaxed text-muted">
+        A six-digit code from an app like Aegis, Ente Auth or 1Password. Optional — a passkey
+        already proves both the device and you. It&apos;s asked for on password sign-in, on
+        recovery, and on any passkey you added after signup.
+      </p>
 
-        {notice && <Alert tone="success">{notice}</Alert>}
+      {notice && <Alert tone="success">{notice}</Alert>}
 
-        <div className={ROW_CLASS}>
-          <div className="flex items-center gap-2 text-[13px]">
-            <MIcon name="pin" size={14} />
-            Authenticator
-            <Chip color={hasTotp ? "success" : "default"} size="sm">
-              <Chip.Label>{hasTotp ? "set up" : "not set up"}</Chip.Label>
-            </Chip>
-          </div>
-          {mode === "view" && (
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onPress={() => setMode("setup")}>
-                {hasTotp ? "Replace" : "Set up"}
-              </Button>
-              {hasTotp && (
-                <Button variant="ghost" size="sm" onPress={() => setMode("remove")}>
-                  Remove
-                </Button>
-              )}
-            </div>
-          )}
+      <div className={ROW_CLASS}>
+        <div className="flex items-center gap-2 text-[13px]">
+          <MIcon name="pin" size={14} />
+          Authenticator
+          <Chip color={hasTotp ? "success" : "default"} size="sm">
+            <Chip.Label>{hasTotp ? "set up" : "not set up"}</Chip.Label>
+          </Chip>
         </div>
-
-        {mode === "setup" && (
-          <AuthenticatorSetup
-            hasTotp={hasTotp}
-            onCancel={close}
-            onDone={(message) => {
-              close();
-              onChanged();
-              setNotice(message);
-            }}
-          />
-        )}
-
-        {mode === "remove" && (
-          <div className="mt-3 rounded-lg border border-danger/30 p-3">
-            <div className="text-[13px] text-danger">
-              Remove the authenticator? Recovery and password sign-in will stop asking for a code.
-            </div>
-            <GateForm gate={gate} onSubmit={onRemove} submitLabel="Remove authenticator" danger />
+        {mode === "view" && (
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onPress={() => setMode("setup")}>
+              {hasTotp ? "Replace" : "Set up"}
+            </Button>
+            {hasTotp && (
+              <Button variant="ghost" size="sm" onPress={() => setMode("remove")}>
+                Remove
+              </Button>
+            )}
           </div>
         )}
-      </Card.Content>
-    </Card>
+      </div>
+
+      {mode === "setup" && (
+        <AuthenticatorSetup
+          hasTotp={hasTotp}
+          onCancel={close}
+          onDone={(message) => {
+            close();
+            onChanged();
+            setNotice(message);
+          }}
+        />
+      )}
+
+      {mode === "remove" && (
+        <div className="mt-3 rounded-lg border border-danger/30 p-3">
+          <div className="text-[13px] text-danger">
+            Remove the authenticator? Recovery and password sign-in will stop asking for a code.
+          </div>
+          <GateForm gate={gate} onSubmit={onRemove} submitLabel="Remove authenticator" danger />
+        </div>
+      )}
+    </section>
   );
 }

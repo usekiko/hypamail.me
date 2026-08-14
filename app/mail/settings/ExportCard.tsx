@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Button, Card } from "@heroui/react";
+import { Button } from "@heroui/react";
 import { Alert } from "../../ui/Alert";
 import { MIcon } from "@/components/ui/material-icon";
 import GateForm from "./GateForm";
@@ -47,27 +47,25 @@ export default function ExportCard({ hasTotp }: { hasTotp: boolean }) {
   }
 
   return (
-    <Card className="mt-3">
-      <Card.Content>
-        <b className="text-sm">Your data</b>
-        <p className="mt-2 mb-4 text-[13px] leading-relaxed text-muted">
-          Download everything our database holds about this account as JSON. Your messages
-          aren&apos;t in it — they&apos;re stored encrypted and we can&apos;t read them, so use your
-          mail client to keep those. The internal mailbox password and your authenticator secret
-          are left out too, since both are live credentials.
-        </p>
+    <section className="mt-8 border-t border-border pt-8">
+      <b className="text-sm">Your data</b>
+      <p className="mt-2 mb-4 text-[13px] leading-relaxed text-muted">
+        Download everything our database holds about this account as JSON. Your messages
+        aren&apos;t in it — they&apos;re stored encrypted and we can&apos;t read them, so use your
+        mail client to keep those. The internal mailbox password and your authenticator secret
+        are left out too, since both are live credentials.
+      </p>
 
-        {notice && <Alert tone="success">{notice}</Alert>}
+      {notice && <Alert tone="success">{notice}</Alert>}
 
-        {!open ? (
-          <Button variant="outline" onPress={() => setOpen(true)}>
-            <MIcon name="download" size={16} style={{ marginRight: 6 }} />
-            Export my data
-          </Button>
-        ) : (
-          <GateForm gate={gate} onSubmit={onExport} submitLabel="Download JSON" />
-        )}
-      </Card.Content>
-    </Card>
+      {!open ? (
+        <Button variant="outline" onPress={() => setOpen(true)}>
+          <MIcon name="download" size={16} style={{ marginRight: 6 }} />
+          Export my data
+        </Button>
+      ) : (
+        <GateForm gate={gate} onSubmit={onExport} submitLabel="Download JSON" />
+      )}
+    </section>
   );
 }

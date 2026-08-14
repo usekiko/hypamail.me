@@ -3,7 +3,7 @@
 // The optional password. Setting one re-wraps the mail key under it locally —
 // the password itself never leaves the browser, same as at signup.
 import { useState } from "react";
-import { Button, Card, Chip, InputGroup } from "@heroui/react";
+import { Button, Chip, InputGroup } from "@heroui/react";
 import { Alert } from "../../ui/Alert";
 import { MIcon } from "@/components/ui/material-icon";
 import GateForm from "./GateForm";
@@ -105,84 +105,82 @@ export default function PasswordCard({
   }
 
   return (
-    <Card className="mt-3">
-      <Card.Content>
-        <b className="text-sm">Password</b>
-        <p className="mt-2 mb-4 text-[13px] leading-relaxed text-muted">
-          Optional, and useful on a device that can&apos;t hold a passkey. It never reaches us: your
-          browser stretches it and uses the result to lock your mail key, so we still can&apos;t read
-          your mail. Setting or changing it needs your recovery code.
-        </p>
+    <section className="mt-8 border-t border-border pt-8">
+      <b className="text-sm">Password</b>
+      <p className="mt-2 mb-4 text-[13px] leading-relaxed text-muted">
+        Optional, and useful on a device that can&apos;t hold a passkey. It never reaches us: your
+        browser stretches it and uses the result to lock your mail key, so we still can&apos;t read
+        your mail. Setting or changing it needs your recovery code.
+      </p>
 
-        {notice && <Alert tone="success">{notice}</Alert>}
+      {notice && <Alert tone="success">{notice}</Alert>}
 
-        <div className={ROW_CLASS}>
-          <div className="flex items-center gap-2 text-[13px]">
-            <MIcon name="lock" size={14} />
-            Password sign-in
-            <Chip color={hasPassword ? "success" : "default"} size="sm">
-              <Chip.Label>{hasPassword ? "set" : "not set"}</Chip.Label>
-            </Chip>
-          </div>
-          {mode === "view" && (
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onPress={() => setMode("set")}>
-                {hasPassword ? "Change" : "Set a password"}
-              </Button>
-              {hasPassword && (
-                <Button variant="ghost" size="sm" onPress={() => setMode("remove")}>
-                  Remove
-                </Button>
-              )}
-            </div>
-          )}
+      <div className={ROW_CLASS}>
+        <div className="flex items-center gap-2 text-[13px]">
+          <MIcon name="lock" size={14} />
+          Password sign-in
+          <Chip color={hasPassword ? "success" : "default"} size="sm">
+            <Chip.Label>{hasPassword ? "set" : "not set"}</Chip.Label>
+          </Chip>
         </div>
-
-        {mode === "set" && (
-          <GateForm
-            gate={gate}
-            onSubmit={onSet}
-            submitLabel={hasPassword ? "Change password" : "Set password"}
-            disabled={!password || !password2}
-          >
-            <InputGroup fullWidth>
-              <InputGroup.Prefix>
-                <MIcon name="lock" size={16} />
-              </InputGroup.Prefix>
-              <InputGroup.Input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={busy}
-                placeholder={`New password, at least ${PASSWORD_MIN_LENGTH} characters`}
-                autoComplete="new-password"
-              />
-            </InputGroup>
-            <InputGroup fullWidth>
-              <InputGroup.Prefix>
-                <MIcon name="lock" size={16} />
-              </InputGroup.Prefix>
-              <InputGroup.Input
-                type="password"
-                value={password2}
-                onChange={(e) => setPassword2(e.target.value)}
-                disabled={busy}
-                placeholder="Confirm new password"
-                autoComplete="new-password"
-              />
-            </InputGroup>
-          </GateForm>
-        )}
-
-        {mode === "remove" && (
-          <div className="mt-3 rounded-lg border border-danger/30 p-3">
-            <div className="text-[13px] text-danger">
-              Remove the password? You&apos;ll sign in with a passkey or your recovery code.
-            </div>
-            <GateForm gate={gate} onSubmit={onRemove} submitLabel="Remove password" danger />
+        {mode === "view" && (
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onPress={() => setMode("set")}>
+              {hasPassword ? "Change" : "Set a password"}
+            </Button>
+            {hasPassword && (
+              <Button variant="ghost" size="sm" onPress={() => setMode("remove")}>
+                Remove
+              </Button>
+            )}
           </div>
         )}
-      </Card.Content>
-    </Card>
+      </div>
+
+      {mode === "set" && (
+        <GateForm
+          gate={gate}
+          onSubmit={onSet}
+          submitLabel={hasPassword ? "Change password" : "Set password"}
+          disabled={!password || !password2}
+        >
+          <InputGroup fullWidth>
+            <InputGroup.Prefix>
+              <MIcon name="lock" size={16} />
+            </InputGroup.Prefix>
+            <InputGroup.Input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={busy}
+              placeholder={`New password, at least ${PASSWORD_MIN_LENGTH} characters`}
+              autoComplete="new-password"
+            />
+          </InputGroup>
+          <InputGroup fullWidth>
+            <InputGroup.Prefix>
+              <MIcon name="lock" size={16} />
+            </InputGroup.Prefix>
+            <InputGroup.Input
+              type="password"
+              value={password2}
+              onChange={(e) => setPassword2(e.target.value)}
+              disabled={busy}
+              placeholder="Confirm new password"
+              autoComplete="new-password"
+            />
+          </InputGroup>
+        </GateForm>
+      )}
+
+      {mode === "remove" && (
+        <div className="mt-3 rounded-lg border border-danger/30 p-3">
+          <div className="text-[13px] text-danger">
+            Remove the password? You&apos;ll sign in with a passkey or your recovery code.
+          </div>
+          <GateForm gate={gate} onSubmit={onRemove} submitLabel="Remove password" danger />
+        </div>
+      )}
+    </section>
   );
 }
