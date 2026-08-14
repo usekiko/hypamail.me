@@ -36,6 +36,29 @@
      instead of the 12px HeroUI derives from its own 0.5rem. */
   --field-placeholder: var(--muted);
   --field-radius: calc(var(--radius) * 1.5);
+
+  /* Focus rings. HeroUI declares --focus: var(--accent) on <html>, so it's
+     already substituted to blue by the time it inherits down here -- restating
+     it is the only way to change it, same as the two above. */
+  --focus: #ffffff;
+}
+
+/* White primary buttons. Set on the button's own variables rather than
+   --accent: per the note above, --accent-hover/--focus are derived at the html
+   level, so overriding --accent here would desync the resting and hover fills. */
+.heroui-scope .button--primary {
+  --button-bg: #ffffff;
+  --button-bg-hover: oklch(0.9 0 0);
+  --button-bg-pressed: oklch(0.84 0 0);
+  --button-fg: #000000;
+}
+
+/* HeroUI's `.button { color: var(--button-fg) }` lives in @layer components,
+   and globals.css's `a { color: inherit }` is unlayered -- unlayered always
+   beats layered, so a Link-rendered button ignored --button-fg entirely and
+   inherited the page's white text. Restate it unlayered to win that. */
+.heroui-scope a.button {
+  color: var(--button-fg);
 }
 
 /* app/globals.css sets html/body to 14px site-wide (the rest of the app is

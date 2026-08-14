@@ -52,8 +52,15 @@ a {
   text-decoration: none;
   color: inherit;
 }
-a:hover {
+/* Links underline on hover, buttons don't. Anything using buttonVariants()
+   renders as an <a> when it's a Link, so it'd otherwise inherit the underline. */
+a:hover:not(.button) {
   text-decoration: underline;
+}
+
+::selection {
+  background: var(--foreground);
+  color: var(--background);
 }
 
 input,
