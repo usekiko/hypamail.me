@@ -11,7 +11,15 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Instrument_Sans } from "next/font/google";
 import { Button, InputGroup } from "@heroui/react";
-import { loginBegin, loginBeginForDevice, loginComplete, loginTotp, setPrfWrap } from "../actions";
+import {
+  loginBegin,
+  loginBeginForDevice,
+  loginComplete,
+  loginTotp,
+  setPrfWrap,
+  passwordSalt,
+  passwordLogin,
+} from "../actions";
 import {
   webauthnGet,
   unwrapWithPrf,
@@ -19,6 +27,8 @@ import {
   wrapWithPrf,
   recoveryWordsError,
   storeMailKey,
+  derivePasswordKeys,
+  unwrapWithPasswordKey,
 } from "@/lib/client/crypto";
 import { AlertMessage } from "@/components/ui/alert-message";
 import { MIcon } from "@/components/ui/material-icon";
@@ -31,7 +41,7 @@ import "../heroui.css";
 
 const instrumentSans = Instrument_Sans({ subsets: ["latin"], weight: ["400", "500", "600", "700"] });
 
-type Phase = "idle" | "totp" | "words";
+type Phase = "idle" | "totp" | "words" | "password";
 
 const TITLES: Record<Phase, { title: string; subtitle: string }> = {
   idle: {
@@ -40,6 +50,7 @@ const TITLES: Record<Phase, { title: string; subtitle: string }> = {
   },
   totp: { title: "One more step", subtitle: "Enter the code from your authenticator app." },
   words: { title: "Unlock your mail", subtitle: "One-time step for this browser." },
+  password: { title: "Sign in", subtitle: "Your password unlocks your mail on this device." },
 };
 
 export default function LoginPage() {
@@ -52,6 +63,10 @@ export default function LoginPage() {
   const [words, setWords] = useState("");
   const [deviceUser, setDeviceUser] = useState("");
   const [showDevice, setShowDevice] = useState(false);
+  const [pwUser, setPwUser] = useState("");
+  const [pwValue, setPwValue] = useState("");
+  const [pwTotp, setPwTotp] = useState("");
+  const [pwNeedsTotp, setPwNeedsTotp] = useState(false);
   // Carried between steps within one attempt.
   const [ctx, setCtx] = useState<{
     prfOutput: ArrayBuffer | null;
@@ -89,6 +104,35 @@ export default function LoginPage() {
       return;
     }
     await finishUnlock(res, got.prfOutput);
+  }
+
+  // Password sign-in. The salt is fetched first, the password is stretched here,
+  // and only the auth half is sent — the wrap half stays put and opens the mail
+  // key locally, so this never becomes a way for the server to read mail.
+  async function onPassword(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
+    setBusy(true);
+    try {
+      const username = pwUser.trim().toLowerCase();
+      const { salt } = await passwordSalt({ username });
+      const { authKey, wrapKey } = await derivePasswordKeys(pwValue, salt);
+      const res = await passwordLogin({ username, passwordAuthKey: authKey, totpCode: pwTotp });
+      if (res.needTotp) {
+        setPwNeedsTotp(true);
+        return;
+      }
+      if (res.error || !res.ok || !res.wrappedKeyPassword) {
+        setError(res.error || "Something went wrong.");
+        return;
+      }
+      storeMailKey(await unwrapWithPasswordKey(wrapKey, res.wrappedKeyPassword));
+      router.push("/mail");
+    } catch {
+      setError("Could not sign in. Please try again.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   function assertionError(err: unknown) {
@@ -297,8 +341,77 @@ export default function LoginPage() {
               </button>
             )}
 
+            <button
+              type="button"
+              onClick={() => { setPhase("password"); setError(null); }}
+              className="mt-3 block bg-transparent border-0 p-0 text-sm text-muted underline cursor-pointer hover:text-foreground"
+            >
+              Sign in with a password instead
+            </button>
+
             <PasskeyHelp />
           </>
+        )}
+
+        {phase === "password" && (
+          <form onSubmit={onPassword} className="space-y-4">
+            <InputGroup fullWidth>
+              <InputGroup.Prefix>
+                <MIcon name="person" size={16} />
+              </InputGroup.Prefix>
+              <InputGroup.Input
+                placeholder="Username"
+                value={pwUser}
+                onChange={(e) => setPwUser(e.target.value.trim().toLowerCase())}
+                autoComplete="username"
+                autoCapitalize="none"
+                required
+              />
+            </InputGroup>
+            <InputGroup fullWidth>
+              <InputGroup.Prefix>
+                <MIcon name="lock" size={16} />
+              </InputGroup.Prefix>
+              <InputGroup.Input
+                type="password"
+                placeholder="Password"
+                value={pwValue}
+                onChange={(e) => setPwValue(e.target.value)}
+                autoComplete="current-password"
+                required
+              />
+            </InputGroup>
+            {pwNeedsTotp && (
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2 pl-1">
+                  6-digit code from your authenticator
+                </label>
+                <InputGroup fullWidth>
+                  <InputGroup.Input
+                    inputMode="numeric"
+                    pattern="[0-9]{6}"
+                    maxLength={6}
+                    placeholder="000000"
+                    value={pwTotp}
+                    onChange={(e) => setPwTotp(e.target.value.replace(/\D/g, ""))}
+                    required
+                    style={{ fontFamily: "ui-monospace, monospace", letterSpacing: "0.3em", textAlign: "center" }}
+                  />
+                </InputGroup>
+              </div>
+            )}
+            <Button type="submit" variant="primary" size="lg" isDisabled={busy || !pwUser || !pwValue} fullWidth>
+              {busy ? "Signing in…" : "Sign in"}
+            </Button>
+            {error && <AlertMessage tone="error" style={{ marginBottom: 0 }}>{error}</AlertMessage>}
+            <button
+              type="button"
+              onClick={() => { setPhase("idle"); setError(null); setPwNeedsTotp(false); }}
+              className="block bg-transparent border-0 p-0 text-sm text-muted underline cursor-pointer hover:text-foreground"
+            >
+              Back to passkey sign-in
+            </button>
+          </form>
         )}
       </DarkAuthColumn>
     </div>
