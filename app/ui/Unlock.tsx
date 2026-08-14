@@ -1,10 +1,8 @@
 "use client";
 
-// Unlocks the mail key into sessionStorage for an already-authenticated session
-// (fresh tab, browser restart). Two local paths, no re-login:
-//   - passkey tap → PRF output → unwrap the per-credential blob
-//   - 12 recovery words → unwrap the recovery blob
-// Fetches only wrapped blobs from the server; unwrapping happens here.
+// Puts the mail key back in sessionStorage for a session that's already signed
+// in (fresh tab, browser restart). Two local paths, no re-login: a passkey tap
+// via PRF, or the 12 recovery words. Only wrapped blobs come from the server.
 import { useState } from "react";
 import { getWrappedKeys, setPrfWrap } from "../actions";
 import {
@@ -16,7 +14,7 @@ import {
   storeMailKey,
 } from "@/lib/client/crypto";
 import { Button, Card } from "@heroui/react";
-import { AlertMessage } from "@/components/ui/alert-message";
+import { Alert } from "./Alert";
 import { MIcon } from "@/components/ui/material-icon";
 import RecoveryWordsInput from "./RecoveryWordsInput";
 
@@ -122,7 +120,7 @@ export default function Unlock({ onUnlocked }: { onUnlocked: (key: string) => vo
             </Button>
           </form>
         </details>
-        {error && <AlertMessage tone="error" style={{ marginTop: "0.75rem", marginBottom: 0 }}>{error}</AlertMessage>}
+        {error && <Alert tone="error" style={{ marginTop: "0.75rem", marginBottom: 0 }}>{error}</Alert>}
       </Card.Content>
     </Card>
   );

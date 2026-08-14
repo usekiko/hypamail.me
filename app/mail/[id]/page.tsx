@@ -4,18 +4,15 @@ import { getSession } from "@/lib/session";
 import { getEmailMeta, markSeen } from "@/lib/jmap";
 import { deleteEmailAction } from "../actions";
 import { Button, Card, buttonVariants } from "@heroui/react";
-import { AlertMessage } from "@/components/ui/alert-message";
+import { Alert } from "../../ui/Alert";
 import { MIcon } from "@/components/ui/material-icon";
 import MessageBody from "../MessageBody";
 
 export const dynamic = "force-dynamic";
 
-// Zero-access rendering: the server only ever sees the cleartext headers
-// (sender, subject, date — Stalwart keeps those for the list view). The body
-// is PGP ciphertext, streamed to <MessageBody /> and decrypted in the browser
-// with a key the server never holds. Sanitization (strict text-only allowlist,
-// no images/scripts/remote content) happens client-side in lib/client/mail.ts,
-// backed by the page CSP.
+// The server sees only the cleartext headers Stalwart keeps for the list view.
+// The body is ciphertext, streamed to <MessageBody /> and decrypted in the
+// browser; sanitizing happens there too (lib/client/mail.ts), behind the CSP.
 export default async function ReadPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = (await getSession())!;
@@ -46,9 +43,9 @@ export default async function ReadPage({ params }: { params: Promise<{ id: strin
       </div>
 
       {mail.spam && (
-        <AlertMessage tone="warning" icon={<MIcon name="report" size={16} style={{ marginRight: 8, marginTop: 2 }} />}>
+        <Alert tone="warning" icon={<MIcon name="report" size={16} style={{ marginRight: 8, marginTop: 2 }} />}>
           Flagged as probable spam. Be cautious with links, attachments, and anything asking for personal info.
-        </AlertMessage>
+        </Alert>
       )}
 
       <Card className="mb-2.5">

@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { loadMailKey } from "@/lib/client/crypto";
 import { decryptMail, type DecryptedMail } from "@/lib/client/mail";
-import { AlertMessage } from "@/components/ui/alert-message";
+import { Alert } from "../ui/Alert";
 import Unlock from "../ui/Unlock";
 
 type State =
@@ -41,7 +41,7 @@ export default function MessageBody({ emailId }: { emailId: string }) {
     return <div style={{ color: "var(--muted-foreground)", padding: "1.5rem", textAlign: "center" }}>Decrypting…</div>;
   }
   if (state.phase === "error") {
-    return <AlertMessage tone="error" style={{ marginBottom: 0 }}>{state.message}</AlertMessage>;
+    return <Alert tone="error" style={{ marginBottom: 0 }}>{state.message}</Alert>;
   }
 
   const { mail } = state;
@@ -55,9 +55,9 @@ export default function MessageBody({ emailId }: { emailId: string }) {
         </pre>
       )}
       {!mail.encrypted && (
-        <AlertMessage tone="warning" icon={null} style={{ marginTop: 12, marginBottom: 0, fontSize: 12 }}>
+        <Alert tone="warning" icon={null} style={{ marginTop: 12, marginBottom: 0, fontSize: 12 }}>
           This message was stored before encryption was enabled for your mailbox.
-        </AlertMessage>
+        </Alert>
       )}
     </>
   );
