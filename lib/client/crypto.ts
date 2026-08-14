@@ -10,6 +10,17 @@
 //   passkey PRF output (per credential, fixed app salt)
 //     └─ HKDF "prf-wrap"      → wrapKey   → same private key, wrapped per passkey
 //
+//   password (optional, per-user random salt)
+//     └─ PBKDF2-SHA256 → master
+//         ├─ HKDF "password-auth" → authKey → sent to server, stored hashed
+//         └─ HKDF "password-wrap" → wrapKey → same private key, wrapped again
+//
+// The password branch runs PBKDF2 first because a chosen password carries far
+// less entropy than the 12-word code; the recovery/PRF branches feed HKDF
+// directly since their inputs are already uniformly random. The password itself
+// never leaves the device — only the derived authKey does, exactly as with the
+// recovery code, so the server still cannot unwrap anything.
+//
 // The PGP private key decrypts mail that Stalwart encrypted on arrival with the
 // matching public key. The server holds only ciphertext + wrapped blobs.
 import * as openpgp from "openpgp";
@@ -20,6 +31,14 @@ const HKDF_SALT = new TextEncoder().encode("hypamail-v1");
 const INFO_AUTH = "hypamail/recovery-auth/v1";
 const INFO_RECOVERY_WRAP = "hypamail/recovery-wrap/v1";
 const INFO_PRF_WRAP = "hypamail/prf-wrap/v1";
+const INFO_PASSWORD_AUTH = "hypamail/password-auth/v1";
+const INFO_PASSWORD_WRAP = "hypamail/password-wrap/v1";
+
+// OWASP's floor for PBKDF2-SHA256. ~1s on a mid-range phone; it runs once at
+// sign-in, so the cost lands on an attacker guessing offline against a stolen
+// password_auth_hash, which is the point.
+const PASSWORD_KDF_ITERATIONS = 600_000;
+export const PASSWORD_MIN_LENGTH = 10;
 
 // One fixed PRF salt for the whole app (see lib/webauthn.ts for why this is
 // safe). SHA-256("hypamail.me/prf/v1").
@@ -167,6 +186,87 @@ export async function unwrapWithRecovery(words: string, blob: string): Promise<s
 
 export async function wrapWithPrf(prfOutput: ArrayBuffer, armoredPrivateKey: string): Promise<string> {
   return wrap(await derivePrfWrapKey(prfOutput), armoredPrivateKey);
+}
+
+// ---------- optional password ----------
+
+/** Fresh per-user salt. Stored server-side and handed out before sign-in. */
+export function generatePasswordSalt(): string {
+  return b64urlEncode(crypto.getRandomValues(new Uint8Array(16)));
+}
+
+export function passwordError(password: string): string | null {
+  if (!password) return "Enter a password.";
+  if (password.length < PASSWORD_MIN_LENGTH) {
+    return `Use at least ${PASSWORD_MIN_LENGTH} characters, ${password.length} so far.`;
+  }
+  if (password.length > 512) return "That password is too long.";
+  return null;
+}
+
+// Slow step, shared by both branches below. Everything after this is cheap, so
+// signing in derives this once and splits it two ways.
+async function derivePasswordMaster(password: string, salt: string): Promise<Uint8Array> {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(password) as BufferSource,
+    "PBKDF2",
+    false,
+    ["deriveBits"]
+  );
+  const bits = await crypto.subtle.deriveBits(
+    {
+      name: "PBKDF2",
+      hash: "SHA-256",
+      salt: b64urlDecode(salt) as BufferSource,
+      iterations: PASSWORD_KDF_ITERATIONS,
+    },
+    key,
+    256
+  );
+  return new Uint8Array(bits);
+}
+
+/** The login proof sent to the server. Cannot decrypt anything (different info). */
+export async function derivePasswordAuthKey(password: string, salt: string): Promise<string> {
+  return b64urlEncode(await hkdf(await derivePasswordMaster(password, salt), INFO_PASSWORD_AUTH));
+}
+
+async function derivePasswordWrapKey(password: string, salt: string): Promise<CryptoKey> {
+  return aesKeyFromBits(await hkdf(await derivePasswordMaster(password, salt), INFO_PASSWORD_WRAP));
+}
+
+/** Both halves in one PBKDF2 pass — used at sign-in, where we need each once. */
+export async function derivePasswordKeys(
+  password: string,
+  salt: string
+): Promise<{ authKey: string; wrapKey: CryptoKey }> {
+  const master = await derivePasswordMaster(password, salt);
+  return {
+    authKey: b64urlEncode(await hkdf(master, INFO_PASSWORD_AUTH)),
+    wrapKey: await aesKeyFromBits(await hkdf(master, INFO_PASSWORD_WRAP)),
+  };
+}
+
+export async function wrapWithPassword(
+  password: string,
+  salt: string,
+  armoredPrivateKey: string
+): Promise<string> {
+  return wrap(await derivePasswordWrapKey(password, salt), armoredPrivateKey);
+}
+
+export async function unwrapWithPassword(
+  password: string,
+  salt: string,
+  blob: string
+): Promise<string> {
+  return unwrap(await derivePasswordWrapKey(password, salt), blob);
+}
+
+/** Unwrap with a wrapKey already derived by derivePasswordKeys(). */
+export async function unwrapWithPasswordKey(wrapKey: CryptoKey, blob: string): Promise<string> {
+  return unwrap(wrapKey, blob);
 }
 
 export async function unwrapWithPrf(prfOutput: ArrayBuffer, blob: string): Promise<string> {

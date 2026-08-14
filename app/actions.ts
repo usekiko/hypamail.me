@@ -48,6 +48,7 @@ import {
   listCredentialMeta,
   removeCredential,
   setRequireTotpOnLogin,
+  getPasswordSalt,
   recoveryHashMatches,
   hashIp,
   isRateLimited,
@@ -81,6 +82,8 @@ const LOGIN_LOOKUP_WINDOW = 600;
 // Legacy migration password checks — the budget the old password login had.
 const LEGACY_MAX = 8;
 const LEGACY_WINDOW = 600;
+const PASSWORD_MAX = 8;
+const PASSWORD_WINDOW = 600;
 
 // Real client IP. We trust ONLY Cloudflare's CF-Connecting-IP, which Cloudflare
 // sets authoritatively and a client cannot override. We deliberately do NOT fall
@@ -183,13 +186,20 @@ export interface SignupCompleteResult {
 }
 
 export async function signupComplete(payload: {
-  attestation: unknown;
+  // All three credentials are optional and independent. The recovery code is the
+  // one constant: it always wraps the mail key, so an account can never end up
+  // with no way back in.
+  attestation: unknown | null;
   prfCapable: boolean;
   wrappedKeyPrf: string | null;
   wrappedKeyRecovery: string;
   recoveryAuthKey: string;
   pgpPublicKey: string;
-  totpCode: string;
+  totpCode: string | null;
+  enrollTotp: boolean;
+  passwordSalt: string | null;
+  passwordAuthKey: string | null;
+  wrappedKeyPassword: string | null;
 }): Promise<SignupCompleteResult> {
   const ceremony = await takeCeremony("signup");
   if (!ceremony?.username || !ceremony.totpSecret) {
@@ -214,21 +224,38 @@ export async function signupComplete(payload: {
     return { error: "Malformed signup payload.", fatal: true };
   }
 
-  // The ceremony cookie was consumed above and is single-use by design, so TOTP
-  // codes can't be brute-forced against one challenge: a wrong code restarts
-  // the wizard.
-  if (!verifyTotp(totpSecret, payload.totpCode)) {
-    await recordAttempt(ipHash, "signup");
-    return { error: "Wrong authenticator code. Signup restarted for safety.", fatal: true };
+  // A password is stored as three fields or none; a half-set would leave an
+  // account that advertises password login but can never satisfy it.
+  const wantsPassword =
+    !!payload.passwordSalt || !!payload.passwordAuthKey || !!payload.wrappedKeyPassword;
+  if (
+    wantsPassword &&
+    !(payload.passwordSalt && payload.passwordAuthKey && payload.wrappedKeyPassword)
+  ) {
+    return { error: "Malformed signup payload.", fatal: true };
   }
 
-  const cred = await verifyRegistration(
-    payload.attestation as RegistrationResponseJSON,
-    ceremony.challenge
-  );
-  if (!cred) {
-    await recordAttempt(ipHash, "signup");
-    return { error: "Passkey could not be verified. Please start over.", fatal: true };
+  // Only verify the authenticator if the user chose to enrol one. The ceremony
+  // cookie was consumed above and is single-use by design, so codes can't be
+  // brute-forced against one challenge: a wrong code restarts the wizard.
+  if (payload.enrollTotp) {
+    if (!payload.totpCode || !verifyTotp(totpSecret, payload.totpCode)) {
+      await recordAttempt(ipHash, "signup");
+      return { error: "Wrong authenticator code. Signup restarted for safety.", fatal: true };
+    }
+  }
+
+  // Likewise the passkey: absent attestation means the user skipped it.
+  let cred: Awaited<ReturnType<typeof verifyRegistration>> = null;
+  if (payload.attestation) {
+    cred = await verifyRegistration(
+      payload.attestation as RegistrationResponseJSON,
+      ceremony.challenge
+    );
+    if (!cred) {
+      await recordAttempt(ipHash, "signup");
+      return { error: "Passkey could not be verified. Please start over.", fatal: true };
+    }
   }
 
   if ((await usernameExists(username)) || (await usernameTaken(username))) {
@@ -271,18 +298,23 @@ export async function signupComplete(payload: {
     pgpPublicKey: payload.pgpPublicKey,
     wrappedKeyRecovery: payload.wrappedKeyRecovery,
     recoveryAuthHash: sha256hex(payload.recoveryAuthKey),
-    totpSecretEnc: encryptSecret(totpSecret),
+    totpSecretEnc: payload.enrollTotp ? encryptSecret(totpSecret) : null,
+    passwordSalt: payload.passwordSalt,
+    passwordAuthHash: payload.passwordAuthKey ? sha256hex(payload.passwordAuthKey) : null,
+    wrappedKeyPassword: payload.wrappedKeyPassword,
   });
-  await addCredential({
-    id: cred.id,
-    userId,
-    publicKey: cred.publicKey,
-    counter: cred.counter,
-    transports: cred.transports,
-    prfCapable: payload.prfCapable,
-    wrappedKeyPrf: payload.wrappedKeyPrf,
-    isOriginal: true, // the signup passkey: one-tap login, no TOTP
-  });
+  if (cred) {
+    await addCredential({
+      id: cred.id,
+      userId,
+      publicKey: cred.publicKey,
+      counter: cred.counter,
+      transports: cred.transports,
+      prfCapable: payload.prfCapable,
+      wrappedKeyPrf: payload.wrappedKeyPrf,
+      isOriginal: true, // the signup passkey: one-tap login, no TOTP
+    });
+  }
 
   await clearAttempts(ipHash, "signup");
   await createSession(userId, email);
@@ -379,7 +411,10 @@ export async function loginComplete(payload: {
   // Only the original (signup) passkey logs in with a single tap, and only while
   // the account hasn't opted into a TOTP code on every sign-in. Otherwise we've
   // proven possession but hold the session until the second factor is in.
-  if (!credential.isOriginal || user.requireTotpOnLogin) {
+  // No enrolled authenticator means there is no second factor to demand — the
+  // passkey already proved possession, so gating here would lock the account out
+  // of a step it could never satisfy.
+  if (user.totpSecretEnc && (!credential.isOriginal || user.requireTotpOnLogin)) {
     await setCeremony({
       kind: "login-totp",
       challenge: "", // unused; the passkey is already verified
@@ -425,7 +460,9 @@ export async function loginTotp(payload: {
     return { error: "Login session expired. Start again." };
   }
 
-  if (!verifyTotp(decryptSecret(user.totpSecretEnc), payload.totpCode)) {
+  // Defensive: the ceremony above is only ever created for accounts that have a
+  // secret, so reaching here without one means something is inconsistent.
+  if (!user.totpSecretEnc || !verifyTotp(decryptSecret(user.totpSecretEnc), payload.totpCode)) {
     await recordAttempt(ipHash, "login-totp");
     await recordAttempt(userKeyHash, "login-totp");
     return { error: "Wrong authenticator code." };
@@ -485,12 +522,85 @@ export async function recoveryLogin(payload: {
   if (!recoveryHashMatches(user.recoveryAuthHash, sha256hex(payload.recoveryAuthKey))) {
     return fail(false);
   }
-  if (!verifyTotp(decryptSecret(user.totpSecretEnc), payload.totpCode)) return fail(true);
+  // Skipped for accounts with no authenticator: the recovery code is then the
+  // sole factor, which is exactly what opting out of TOTP chose.
+  if (user.totpSecretEnc && !verifyTotp(decryptSecret(user.totpSecretEnc), payload.totpCode)) {
+    return fail(true);
+  }
 
   await clearAttempts(ipHash, "recovery");
   await clearAttempts(userKeyHash, "recovery");
   await createSession(user.id, user.email);
   return { ok: true, wrappedKeyRecovery: user.wrappedKeyRecovery };
+}
+
+// ---------------------------------------------------------------------------
+// Optional password login
+//
+// The password never reaches the server. The browser stretches it with PBKDF2
+// against the per-user salt handed out below, then splits the result: one half
+// authenticates here, the other stays on the device and unwraps the mail key.
+// So this is a password login that still can't decrypt anyone's mail.
+// ---------------------------------------------------------------------------
+
+// Unauthenticated on purpose — the salt is needed before the password can be
+// stretched. Always answers, real salt or stable decoy, so it can't be used to
+// discover which usernames exist.
+export async function passwordSalt(payload: {
+  username: string;
+}): Promise<{ salt: string }> {
+  const username = String(payload.username || "").trim().toLowerCase();
+  return { salt: await getPasswordSalt(username) };
+}
+
+export interface PasswordLoginResult {
+  error?: string;
+  ok?: boolean;
+  needTotp?: boolean;
+  wrappedKeyPassword?: string | null;
+}
+
+export async function passwordLogin(payload: {
+  username: string;
+  passwordAuthKey: string;
+  totpCode: string;
+}): Promise<PasswordLoginResult> {
+  const username = String(payload.username || "").trim().toLowerCase();
+  const ipHash = await clientIpHash();
+  const userKeyHash = hashIp(`user:${username}`);
+
+  if (
+    (await isRateLimited(ipHash, "password", PASSWORD_MAX, PASSWORD_WINDOW)) ||
+    (await isRateLimited(userKeyHash, "password", PASSWORD_MAX, PASSWORD_WINDOW))
+  ) {
+    return { error: "Too many attempts. Please wait a few minutes and try again." };
+  }
+
+  // Mirrors recoveryLogin: the per-username bucket is only charged once the
+  // password itself checked out, so knowing a username can't lock its owner out.
+  const fail = async (chargeUser: boolean) => {
+    await recordAttempt(ipHash, "password");
+    if (chargeUser) await recordAttempt(userKeyHash, "password");
+    return { error: "Wrong username, password, or authenticator code." };
+  };
+
+  const user = await getUserByUsername(username);
+  if (!user || !user.passwordAuthHash || !user.wrappedKeyPassword) return fail(false);
+  if (!recoveryHashMatches(user.passwordAuthHash, sha256hex(payload.passwordAuthKey))) {
+    return fail(false);
+  }
+
+  // A password is a single factor, so an enrolled authenticator is always
+  // demanded here — unlike a passkey, possession of the device isn't proven.
+  if (user.totpSecretEnc) {
+    if (!payload.totpCode) return { needTotp: true };
+    if (!verifyTotp(decryptSecret(user.totpSecretEnc), payload.totpCode)) return fail(true);
+  }
+
+  await clearAttempts(ipHash, "password");
+  await clearAttempts(userKeyHash, "password");
+  await createSession(user.id, user.email);
+  return { ok: true, wrappedKeyPassword: user.wrappedKeyPassword };
 }
 
 // ---------------------------------------------------------------------------
@@ -654,6 +764,11 @@ export async function legacyMigrateComplete(payload: {
     wrappedKeyRecovery: payload.wrappedKeyRecovery,
     recoveryAuthHash: sha256hex(payload.recoveryAuthKey),
     totpSecretEnc: encryptSecret(totpSecret),
+    // The legacy wizard still enrols a passkey and authenticator, and retires
+    // the old password rather than carrying it over.
+    passwordSalt: null,
+    passwordAuthHash: null,
+    wrappedKeyPassword: null,
   });
   await addCredential({
     id: cred.id,
@@ -702,7 +817,8 @@ async function manageGate(
     return { error: "Wrong recovery code or authenticator code." };
   };
   if (!recoveryHashMatches(user.recoveryAuthHash, sha256hex(recoveryAuthKey))) return bad();
-  if (!verifyTotp(decryptSecret(user.totpSecretEnc), totpCode)) return bad();
+  // Accounts without an authenticator are gated on the recovery code alone.
+  if (user.totpSecretEnc && !verifyTotp(decryptSecret(user.totpSecretEnc), totpCode)) return bad();
 
   await clearAttempts(ipHash, "manage");
   await clearAttempts(userKeyHash, "manage");
@@ -749,6 +865,11 @@ export async function setLoginTotpRequired(payload: {
       (await isRateLimited(userKeyHash, "manage", MANAGE_MAX, MANAGE_WINDOW))
     ) {
       return { error: "Too many attempts. Please wait a few minutes and try again." };
+    }
+    // Can't demand a code on every sign-in when there's no authenticator to
+    // produce one — that would lock the account out on the next login.
+    if (!session.user.totpSecretEnc) {
+      return { error: "Set up an authenticator app first, then turn this on." };
     }
     if (!verifyTotp(decryptSecret(session.user.totpSecretEnc), payload.totpCode)) {
       await recordAttempt(ipHash, "manage");

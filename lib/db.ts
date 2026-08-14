@@ -78,6 +78,16 @@ async function init(): Promise<void> {
     -- Opt-in: also demand a TOTP code when signing in with the original passkey
     -- (added passkeys always demand one regardless).
     ALTER TABLE users ADD COLUMN IF NOT EXISTS require_totp_on_login BOOLEAN NOT NULL DEFAULT false;
+    -- Optional password credential. A password wraps the mail key the same way a
+    -- passkey or the recovery code does; the server sees only the salt, a hash of
+    -- the derived auth key, and the wrapped blob. Nullable because signup can now
+    -- skip every credential except the recovery code.
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS password_salt        TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS password_auth_hash   TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS wrapped_key_password TEXT;
+    -- The authenticator is opt-in now. Existing accounts keep their enrolled
+    -- secret; only newly created rows are allowed to omit it.
+    ALTER TABLE users ALTER COLUMN totp_secret_enc DROP NOT NULL;
     CREATE TABLE IF NOT EXISTS webauthn_credentials (
       id              TEXT PRIMARY KEY,
       user_id         BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -210,8 +220,13 @@ export interface UserRow {
   pgpPublicKey: string;
   wrappedKeyRecovery: string;
   recoveryAuthHash: string;
-  totpSecretEnc: string;
+  // null once signup is allowed to skip the authenticator.
+  totpSecretEnc: string | null;
   requireTotpOnLogin: boolean;
+  // Optional password credential; all three are set together or not at all.
+  passwordSalt: string | null;
+  passwordAuthHash: string | null;
+  wrappedKeyPassword: string | null;
 }
 
 function toUser(r: Record<string, unknown>): UserRow {
@@ -224,8 +239,11 @@ function toUser(r: Record<string, unknown>): UserRow {
     pgpPublicKey: r.pgp_public_key as string,
     wrappedKeyRecovery: r.wrapped_key_recovery as string,
     recoveryAuthHash: r.recovery_auth_hash as string,
-    totpSecretEnc: r.totp_secret_enc as string,
+    totpSecretEnc: (r.totp_secret_enc as string | null) ?? null,
     requireTotpOnLogin: !!r.require_totp_on_login,
+    passwordSalt: (r.password_salt as string | null) ?? null,
+    passwordAuthHash: (r.password_auth_hash as string | null) ?? null,
+    wrappedKeyPassword: (r.wrapped_key_password as string | null) ?? null,
   };
 }
 
@@ -239,12 +257,63 @@ export async function createUser(u: Omit<UserRow, "id" | "requireTotpOnLogin">):
   await db();
   const r = await getPool().query(
     `INSERT INTO users (username, email, account_id, enc_mail_password, pgp_public_key,
-                        wrapped_key_recovery, recovery_auth_hash, totp_secret_enc)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+                        wrapped_key_recovery, recovery_auth_hash, totp_secret_enc,
+                        password_salt, password_auth_hash, wrapped_key_password)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
     [u.username, u.email, u.accountId, u.encMailPassword, u.pgpPublicKey,
-     u.wrappedKeyRecovery, u.recoveryAuthHash, u.totpSecretEnc]
+     u.wrappedKeyRecovery, u.recoveryAuthHash, u.totpSecretEnc,
+     u.passwordSalt, u.passwordAuthHash, u.wrappedKeyPassword]
   );
   return String(r.rows[0].id);
+}
+
+// ---------- optional password credential ----------
+
+// The salt has to be handed out before sign-in, so this is an unauthenticated
+// lookup. Returning nothing for an unknown username would turn it into a user
+// enumeration oracle, so absent accounts get a stable decoy derived from the
+// server secret — indistinguishable from a real salt, and identical on every
+// attempt, so probing can't separate "no such user" from "no password set".
+export async function getPasswordSalt(username: string): Promise<string> {
+  await db();
+  const r = await getPool().query(
+    `SELECT password_salt FROM users WHERE username = $1`,
+    [username]
+  );
+  const real = r.rowCount === 1 ? (r.rows[0].password_salt as string | null) : null;
+  if (real) return real;
+  return createHmac("sha256", process.env.SESSION_SECRET || "")
+    .update(`password-salt-decoy:${username}`)
+    .digest("base64url")
+    .slice(0, 22);
+}
+
+export async function setUserPassword(
+  userId: string,
+  salt: string,
+  authHash: string,
+  wrappedKey: string
+): Promise<void> {
+  await db();
+  await getPool().query(
+    `UPDATE users SET password_salt = $2, password_auth_hash = $3, wrapped_key_password = $4
+      WHERE id = $1`,
+    [userId, salt, authHash, wrappedKey]
+  );
+}
+
+export async function clearUserPassword(userId: string): Promise<void> {
+  await db();
+  await getPool().query(
+    `UPDATE users SET password_salt = NULL, password_auth_hash = NULL,
+                      wrapped_key_password = NULL WHERE id = $1`,
+    [userId]
+  );
+}
+
+export async function setUserTotpSecret(userId: string, secretEnc: string | null): Promise<void> {
+  await db();
+  await getPool().query(`UPDATE users SET totp_secret_enc = $2 WHERE id = $1`, [userId, secretEnc]);
 }
 
 export async function getUserByUsername(username: string): Promise<UserRow | null> {
