@@ -30,6 +30,28 @@ export default function ComposeForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [bodyFocused, setBodyFocused] = useState(false);
+
+  // The textarea isn't a HeroUI field, so it reads the same tokens by hand —
+  // otherwise it renders with a different radius and border to the InputGroups
+  // stacked above it.
+  const bodyStyle: React.CSSProperties = {
+    width: "100%",
+    minHeight: 300,
+    resize: "vertical",
+    background: "var(--field-background)",
+    border: "1px solid var(--border)",
+    borderRadius: "var(--field-radius)",
+    boxShadow: bodyFocused ? "0 0 0 2px var(--focus)" : undefined,
+    color: "var(--foreground)",
+    padding: "12px 14px",
+    fontFamily: "inherit",
+    fontSize: "14px",
+    lineHeight: 1.65,
+    outline: "none",
+  };
+
+  const labelClass = "block text-sm font-medium mb-2 pl-1 text-foreground";
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -65,79 +87,114 @@ export default function ComposeForm({
 
       <Card>
         <Card.Content>
-          <form onSubmit={onSubmit} className="flex flex-col gap-3">
-            <div className="text-[13px] text-muted">
-              From <span className="text-foreground">{from}</span>
+          <form onSubmit={onSubmit} className="flex flex-col gap-4">
+            <div className="flex items-baseline justify-between gap-3 border-b border-border pb-3">
+              <span className="text-[13px] text-muted">
+                From <span className="text-foreground">{from}</span>
+              </span>
+              {!showCc && (
+                <button
+                  type="button"
+                  onClick={() => setShowCc(true)}
+                  className="shrink-0 text-[12px] text-muted hover:text-foreground"
+                >
+                  Add Cc
+                </button>
+              )}
             </div>
 
-            <InputGroup fullWidth>
-              <InputGroup.Prefix>
-                <MIcon name="person" size={16} />
-              </InputGroup.Prefix>
-              <InputGroup.Input
-                value={to}
-                onChange={(e) => setTo(e.target.value)}
-                disabled={busy}
-                placeholder="To — comma-separated for more than one"
-                autoComplete="off"
-                inputMode="email"
-              />
-            </InputGroup>
-
-            {showCc ? (
+            <div>
+              <label className={labelClass} htmlFor="to">
+                To
+              </label>
               <InputGroup fullWidth>
                 <InputGroup.Prefix>
-                  <MIcon name="group" size={16} />
+                  <MIcon name="person" size={16} />
                 </InputGroup.Prefix>
                 <InputGroup.Input
-                  value={cc}
-                  onChange={(e) => setCc(e.target.value)}
+                  id="to"
+                  value={to}
+                  onChange={(e) => setTo(e.target.value)}
                   disabled={busy}
-                  placeholder="Cc"
+                  placeholder="someone@example.com"
                   autoComplete="off"
                   inputMode="email"
                 />
               </InputGroup>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setShowCc(true)}
-                className="w-fit text-[12px] text-muted hover:text-foreground"
-              >
-                Add Cc
-              </button>
+              <p className="mt-1.5 pl-1 text-[11px] text-muted">
+                Separate multiple addresses with commas.
+              </p>
+            </div>
+
+            {showCc && (
+              <div>
+                <label className={labelClass} htmlFor="cc">
+                  Cc
+                </label>
+                <InputGroup fullWidth>
+                  <InputGroup.Prefix>
+                    <MIcon name="group" size={16} />
+                  </InputGroup.Prefix>
+                  <InputGroup.Input
+                    id="cc"
+                    value={cc}
+                    onChange={(e) => setCc(e.target.value)}
+                    disabled={busy}
+                    placeholder="someone-else@example.com"
+                    autoComplete="off"
+                    inputMode="email"
+                  />
+                </InputGroup>
+              </div>
             )}
 
-            <InputGroup fullWidth>
-              <InputGroup.Prefix>
-                <MIcon name="subject" size={16} />
-              </InputGroup.Prefix>
-              <InputGroup.Input
-                value={subject}
-                onChange={(e) => setSubject(e.target.value)}
-                disabled={busy}
-                placeholder="Subject"
-                autoComplete="off"
-              />
-            </InputGroup>
+            <div>
+              <label className={labelClass} htmlFor="subject">
+                Subject
+              </label>
+              <InputGroup fullWidth>
+                <InputGroup.Prefix>
+                  <MIcon name="subject" size={16} />
+                </InputGroup.Prefix>
+                <InputGroup.Input
+                  id="subject"
+                  value={subject}
+                  onChange={(e) => setSubject(e.target.value)}
+                  disabled={busy}
+                  placeholder="What's it about?"
+                  autoComplete="off"
+                />
+              </InputGroup>
+            </div>
 
-            <textarea
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              disabled={busy}
-              rows={14}
-              placeholder="Write your message…"
-              className="w-full resize-y rounded-lg border border-border bg-[var(--field-background)] p-3 text-[13px] leading-relaxed text-foreground outline-none focus:ring-2 focus:ring-[var(--focus)]"
-            />
+            <div>
+              <label className={labelClass} htmlFor="body">
+                Message
+              </label>
+              <textarea
+                id="body"
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                onFocus={() => setBodyFocused(true)}
+                onBlur={() => setBodyFocused(false)}
+                disabled={busy}
+                placeholder="Write your message…"
+                style={bodyStyle}
+              />
+            </div>
 
             {error && <Alert tone="error" style={{ marginBottom: 0 }}>{error}</Alert>}
             {notice && <Alert tone="warning" style={{ marginBottom: 0 }}>{notice}</Alert>}
 
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3 border-t border-border pt-4">
               <Button type="submit" variant="primary" isDisabled={busy || !to.trim() || !body.trim()}>
+                <MIcon name="send" size={16} style={{ marginRight: 6 }} />
                 {busy ? "Sending…" : "Send"}
               </Button>
-              <span className="text-[11px] text-muted">
+              <Button type="button" variant="outline" onPress={() => router.push("/mail")} isDisabled={busy}>
+                Cancel
+              </Button>
+              <span className="text-[11px] leading-relaxed text-muted">
                 Messages you send leave our servers in plain text, like all email.
               </span>
             </div>
