@@ -182,8 +182,11 @@ export default function RecoverPage() {
             </div>
             <div>
               <label className="block text-[13px] font-medium text-[#f7f8f8] mb-2 pl-1" htmlFor="totp">
-                Authenticator code
+                Authenticator code <span className="text-[#8a8f98]">(if you set one up)</span>
               </label>
+              {/* Not required: accounts that skipped the authenticator have no code
+                  to give, and the field is always shown so a blank submission can't
+                  reveal whether this account enrolled one. */}
               <TextInput
                 id="totp"
                 name="totp"
@@ -192,7 +195,6 @@ export default function RecoverPage() {
                 maxLength={6}
                 placeholder="000000"
                 autoComplete="one-time-code"
-                required
                 fullWidth
                 style={{ fontFamily: "ui-monospace, monospace", letterSpacing: "0.3em", textAlign: "center" }}
               />
