@@ -32,6 +32,11 @@ export const LEGACY_MAX = 8;
 export const LEGACY_WINDOW = 600;
 export const PASSWORD_MAX = 8;
 export const PASSWORD_WINDOW = 600;
+// Sending is a spam vector on a domain with no reputation to spare, so it is
+// capped per account regardless of who granted the permission.
+export const SEND_MAX = 20;
+export const SEND_WINDOW = 3600;
+export const SEND_MAX_RECIPIENTS = 10;
 
 // Only CF-Connecting-IP is trusted. X-Forwarded-For is client-settable and
 // Cloudflare merely appends to it, so honouring it would hand out a fresh

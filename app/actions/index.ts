@@ -28,3 +28,6 @@ export {
 } from "./account";
 
 export { exportAccountData, deleteAccountForever } from "./data";
+
+export { sendMail, canSend } from "./send";
+export type { SendResult } from "./send";

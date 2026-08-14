@@ -131,6 +131,7 @@ export async function listInbox(
 export interface MailMeta extends MailSummary {
   to: { name?: string; email: string }[];
   blobId: string;
+  messageId: string | null; // for In-Reply-To when replying
 }
 
 // Header metadata + the raw-blob id. The body itself is fetched through
@@ -149,7 +150,7 @@ export async function getEmailMeta(
       {
         accountId,
         ids: [id],
-        properties: ["blobId", "from", "to", "subject", "receivedAt", "keywords", "mailboxIds"],
+        properties: ["blobId", "from", "to", "subject", "receivedAt", "keywords", "mailboxIds", "messageId"],
       },
       "0",
     ],
@@ -160,6 +161,7 @@ export async function getEmailMeta(
   return {
     id: e.id as string,
     blobId: e.blobId as string,
+    messageId: ((e.messageId as string[] | undefined) || [])[0] ?? null,
     from: (e.from as MailMeta["from"]) || [],
     to: (e.to as MailMeta["to"]) || [],
     subject: (e.subject as string) ?? null,
@@ -182,6 +184,62 @@ export async function downloadRaw(
   );
   if (!res.ok) throw new Error(`blob download failed: ${res.status}`);
   return res.arrayBuffer();
+}
+
+// Mailbox id for a role ("sent", "drafts", ...), or null if the account has none.
+export async function mailboxByRole(
+  email: string,
+  password: string,
+  accountId: string,
+  role: string
+): Promise<string | null> {
+  const auth = basicAuth(email, password);
+  const [res] = await jmap(auth, USING_MAIL, [
+    ["Mailbox/get", { accountId, properties: ["role"] }, "0"],
+  ]);
+  const list = (res[1].list as Array<{ id: string; role: string }>) || [];
+  return list.find((m) => m.role === role)?.id ?? null;
+}
+
+// Upload raw bytes and file them into a mailbox. Used for the Sent copy, which
+// is already PGP ciphertext by the time it gets here.
+export async function importEmail(
+  email: string,
+  password: string,
+  accountId: string,
+  mailboxId: string,
+  raw: Buffer
+): Promise<void> {
+  const auth = basicAuth(email, password);
+  const up = await fetch(`${JMAP_URL}/jmap/upload/${encodeURIComponent(accountId)}/`, {
+    method: "POST",
+    headers: { "Content-Type": "message/rfc822", Authorization: auth },
+    body: new Uint8Array(raw),
+  });
+  if (!up.ok) throw new Error(`blob upload failed: ${up.status}`);
+  const { blobId } = (await up.json()) as { blobId: string };
+
+  const [res] = await jmap(auth, USING_MAIL, [
+    [
+      "Email/import",
+      {
+        accountId,
+        emails: {
+          sent: {
+            blobId,
+            mailboxIds: { [mailboxId]: true },
+            keywords: { $seen: true },
+            receivedAt: new Date().toISOString().replace(/\.\d+Z$/, "Z"),
+          },
+        },
+      },
+      "0",
+    ],
+  ]);
+  const notCreated = res[1].notCreated as Record<string, unknown> | undefined;
+  if (notCreated && Object.keys(notCreated).length) {
+    throw new Error(`import rejected: ${JSON.stringify(notCreated)}`);
+  }
 }
 
 export async function markSeen(

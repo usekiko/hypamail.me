@@ -27,6 +27,18 @@ export default async function MailLayout({ children }: { children: React.ReactNo
           </Link>
           <div className="flex min-w-0 items-center gap-2 sm:gap-3">
             <span className="truncate text-[13px] text-muted">{session.email}</span>
+            {/* Only for accounts granted allow_send. The server action checks
+                again on every send — this is presentation, not protection. */}
+            {session.user.allowSend && (
+              <Link
+                href="/mail/compose"
+                aria-label="New message"
+                title="New message"
+                className={`${buttonVariants({ variant: "outline", size: "sm", isIconOnly: true })} shrink-0`}
+              >
+                <MIcon name="edit" size={16} />
+              </Link>
+            )}
             <Link
               href="/mail/settings"
               aria-label="Settings"

@@ -84,6 +84,9 @@ async function init(): Promise<void> {
     -- The authenticator is opt-in now. Existing accounts keep their enrolled
     -- secret; only newly created rows are allowed to omit it.
     ALTER TABLE users ALTER COLUMN totp_secret_enc DROP NOT NULL;
+    -- Sending is off unless explicitly granted (HypaTools /allow_send). Default
+    -- false matters: a new account must never be able to send by accident.
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS allow_send BOOLEAN NOT NULL DEFAULT false;
     CREATE TABLE IF NOT EXISTS webauthn_credentials (
       id              TEXT PRIMARY KEY,
       user_id         BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -240,6 +243,7 @@ export interface UserRow {
   passwordSalt: string | null;
   passwordAuthHash: string | null;
   wrappedKeyPassword: string | null;
+  allowSend: boolean;
 }
 
 function toUser(r: Record<string, unknown>): UserRow {
@@ -257,6 +261,7 @@ function toUser(r: Record<string, unknown>): UserRow {
     passwordSalt: (r.password_salt as string | null) ?? null,
     passwordAuthHash: (r.password_auth_hash as string | null) ?? null,
     wrappedKeyPassword: (r.wrapped_key_password as string | null) ?? null,
+    allowSend: !!r.allow_send,
   };
 }
 
@@ -274,7 +279,8 @@ export async function getAccountExport(userId: string): Promise<Record<string, u
     p.query(
       `SELECT id, username, email, account_id, pgp_public_key, wrapped_key_recovery,
               recovery_auth_hash, password_salt, password_auth_hash, wrapped_key_password,
-              (totp_secret_enc IS NOT NULL) AS has_totp, require_totp_on_login, created_at
+              (totp_secret_enc IS NOT NULL) AS has_totp, require_totp_on_login,
+              allow_send, created_at
          FROM users WHERE id = $1`,
       [userId]
     ),
@@ -340,13 +346,26 @@ export async function deleteUser(
   }
 }
 
+// Granted and revoked by HypaTools only — there is no self-serve path to this.
+export async function setAllowSend(email: string, value: boolean): Promise<boolean> {
+  await db();
+  const r = await getPool().query(
+    `UPDATE users SET allow_send = $2 WHERE lower(email) = lower($1) RETURNING id`,
+    [email.trim(), value]
+  );
+  return r.rowCount === 1;
+}
+
 // Defaults to false for new accounts; toggled from Settings.
 export async function setRequireTotpOnLogin(userId: string, value: boolean): Promise<void> {
   await db();
   await getPool().query(`UPDATE users SET require_totp_on_login = $2 WHERE id = $1`, [userId, value]);
 }
 
-export async function createUser(u: Omit<UserRow, "id" | "requireTotpOnLogin">): Promise<string> {
+// allowSend is omitted: sending is granted later by an admin, never at signup.
+export async function createUser(
+  u: Omit<UserRow, "id" | "requireTotpOnLogin" | "allowSend">
+): Promise<string> {
   await db();
   const r = await getPool().query(
     `INSERT INTO users (username, email, account_id, enc_mail_password, pgp_public_key,

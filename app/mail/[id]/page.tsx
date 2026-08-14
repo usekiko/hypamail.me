@@ -33,13 +33,29 @@ export default async function ReadPage({ params }: { params: Promise<{ id: strin
           <MIcon name="arrow_back" size={16} style={{ marginRight: 6 }} />
           Inbox
         </Link>
-        <form action={deleteEmailAction} className="flex">
-          <input type="hidden" name="id" value={mail.id} />
-          <Button type="submit" variant="danger-soft" size="sm">
-            <MIcon name="delete" size={16} style={{ marginRight: 6 }} />
-            Delete
-          </Button>
-        </form>
+        <div className="flex items-center gap-2">
+          {/* Rendered only for accounts with sending enabled; sendMail re-checks. */}
+          {session.user.allowSend && from && (
+            <Link
+              href={`/mail/compose?${new URLSearchParams({
+                to: from.email,
+                subject: /^re:/i.test(mail.subject || "") ? mail.subject! : `Re: ${mail.subject || ""}`,
+                ...(mail.messageId ? { inReplyTo: mail.messageId, references: mail.messageId } : {}),
+              })}`}
+              className={buttonVariants({ variant: "outline", size: "sm" })}
+            >
+              <MIcon name="reply" size={16} style={{ marginRight: 6 }} />
+              Reply
+            </Link>
+          )}
+          <form action={deleteEmailAction} className="flex">
+            <input type="hidden" name="id" value={mail.id} />
+            <Button type="submit" variant="danger-soft" size="sm">
+              <MIcon name="delete" size={16} style={{ marginRight: 6 }} />
+              Delete
+            </Button>
+          </form>
+        </div>
       </div>
 
       {mail.spam && (
