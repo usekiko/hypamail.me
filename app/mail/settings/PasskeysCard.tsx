@@ -1,7 +1,7 @@
 "use client";
 
 import { Button, Card, Chip } from "@heroui/react";
-import { AlertMessage } from "@/components/ui/alert-message";
+import { Alert } from "../../ui/Alert";
 import { MIcon } from "@/components/ui/material-icon";
 import PasskeyHelp from "../../ui/PasskeyHelp";
 import GateForm from "./GateForm";
@@ -37,12 +37,13 @@ export default function PasskeysCard({
         </div>
         <p className="mt-0 mb-4 text-[13px] leading-relaxed text-muted">
           Your <b className="text-foreground">original</b> passkey signs you in with one tap and is
-          permanent. Passkeys you add here also ask for an authenticator code when signing in, and
-          can be removed. Adding or removing a passkey always needs your recovery code +
-          authenticator code.
+          permanent. Passkeys you add here can be removed
+          {gate.hasTotp && ", and ask for an authenticator code when signing in"}. Adding or
+          removing one always needs your recovery code
+          {gate.hasTotp ? " + authenticator code." : "."}
         </p>
 
-        {notice && <AlertMessage tone="success">{notice}</AlertMessage>}
+        {notice && <Alert tone="success">{notice}</Alert>}
 
         {passkeys === null ? (
           <div className="text-[13px] text-muted">Loading…</div>
@@ -87,15 +88,15 @@ export default function PasskeysCard({
 
         {mode.kind === "add" && (
           <div className="mt-3">
-            <AlertMessage
+            <Alert
               tone="info"
               icon={<MIcon name="info" size={16} style={{ flexShrink: 0, marginRight: 8, marginTop: 2 }} />}
               style={{ fontSize: 12 }}
             >
-              Adding a passkey <b>won&apos;t reset your recovery code or your authenticator</b>.
-              Both stay exactly as they are. You&apos;re only entering them here to prove
-              it&apos;s you.
-            </AlertMessage>
+              Adding a passkey <b>won&apos;t reset your recovery code</b>
+              {gate.hasTotp && <> or your authenticator</>}. Nothing changes — you&apos;re only
+              entering it here to prove it&apos;s you.
+            </Alert>
             <GateForm gate={gate} onSubmit={onAdd} submitLabel="Create passkey" />
           </div>
         )}

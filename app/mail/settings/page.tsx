@@ -1,35 +1,22 @@
 "use client";
 
-// Passkey management. Adding or removing a passkey always requires the recovery
-// code + a TOTP code (even though you're signed in), so a stolen session can't
-// enroll or strip a device. Max 3 passkeys. The original (signup) passkey is
-// permanent: it's the only one that logs in with a single tap, so it can't be
-// removed; the rest also ask for a TOTP code at login.
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import {
-  listPasskeys,
-  addPasskeyBegin,
-  addPasskeyComplete,
-  removePasskey,
-  setLoginTotpRequired,
-} from "../../actions";
-import {
-  deriveRecoveryAuthKey,
-  unwrapWithRecovery,
-  webauthnCreate,
-  wrapWithPrf,
-  recoveryWordsError,
-  loadMailKey,
-} from "@/lib/client/crypto";
+import { listPasskeys, setLoginTotpRequired } from "../../actions";
+import { deriveRecoveryAuthKey, recoveryWordsError } from "@/lib/client/crypto";
+import AuthenticatorCard from "./AuthenticatorCard";
 import PasskeysCard from "./PasskeysCard";
+import PasswordCard from "./PasswordCard";
 import TwoFactorCard from "./TwoFactorCard";
+import { addPasskey, deletePasskey } from "./passkeyActions";
 import type { GateState, Mode, Passkey } from "./types";
 
 export default function SettingsPage() {
   const [passkeys, setPasskeys] = useState<Passkey[] | null>(null);
   const [max, setMax] = useState(3);
   const [requireTotp, setRequireTotp] = useState(false);
+  const [hasTotp, setHasTotp] = useState(false);
+  const [hasPassword, setHasPassword] = useState(false);
   const [mode, setMode] = useState<Mode>({ kind: "view" });
   const [words, setWords] = useState("");
   const [totpCode, setTotpCode] = useState("");
@@ -43,6 +30,8 @@ export default function SettingsPage() {
       setPasskeys(res.passkeys);
       if (res.max) setMax(res.max);
       setRequireTotp(!!res.requireTotpOnLogin);
+      setHasTotp(!!res.hasTotp);
+      setHasPassword(!!res.hasPassword);
     }
   }, []);
 
@@ -58,125 +47,85 @@ export default function SettingsPage() {
     setNotice(null);
   }
 
-  async function onAdd(e: React.FormEvent<HTMLFormElement>) {
+  // Every passkey change runs the same shape: validate the words, do the work,
+  // then either show the error or reload and close.
+  async function run(
+    e: React.FormEvent<HTMLFormElement>,
+    work: () => Promise<string | null>,
+    done: string
+  ) {
     e.preventDefault();
     setError(null);
     const wordsErr = recoveryWordsError(words);
-    if (wordsErr) {
-      setError(wordsErr);
-      return;
-    }
+    if (wordsErr) return setError(wordsErr);
     setBusy(true);
     try {
-      const recoveryAuthKey = await deriveRecoveryAuthKey(words);
-      const begin = await addPasskeyBegin({ recoveryAuthKey, totpCode });
-      if (begin.error || !begin.optionsJSON || !begin.wrappedKeyRecovery) {
-        setError(begin.error || "Could not start passkey setup.");
-        return;
-      }
-      const created = await webauthnCreate(begin.optionsJSON);
-      // The new passkey needs its own PRF-wrapped copy of the mail key. Unwrap
-      // the source key from the recovery blob with the words just entered
-      // (falling back to the already-unlocked key if present).
-      let mailKey = loadMailKey();
-      if (!mailKey) {
-        try {
-          mailKey = await unwrapWithRecovery(words, begin.wrappedKeyRecovery);
-        } catch {
-          mailKey = null;
-        }
-      }
-      const res = await addPasskeyComplete({
-        attestation: created.responseJSON,
-        prfCapable: created.prfEnabled,
-        wrappedKeyPrf:
-          created.prfOutput && mailKey ? await wrapWithPrf(created.prfOutput, mailKey) : null,
-      });
-      if (!res.ok) {
-        setError(res.error || "Could not save the passkey.");
-        return;
-      }
+      const err = await work();
+      if (err) return setError(err);
       await reload();
       resetForm({ kind: "view" });
-      setNotice("Passkey added. Signing in with it will also ask for a code from your authenticator.");
-    } catch (err) {
-      setError(
-        err instanceof DOMException && err.name === "InvalidStateError"
-          ? "This device already has a passkey for your account."
-          : err instanceof DOMException && err.name === "NotAllowedError"
-            ? "Passkey creation was cancelled."
-            : "This browser couldn't create a passkey. See the help below."
-      );
+      setNotice(done);
     } finally {
       setBusy(false);
     }
   }
 
-  async function onRemove(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (mode.kind !== "remove") return;
-    setError(null);
-    const wordsErr = recoveryWordsError(words);
-    if (wordsErr) {
-      setError(wordsErr);
-      return;
-    }
-    setBusy(true);
-    try {
-      const recoveryAuthKey = await deriveRecoveryAuthKey(words);
-      const res = await removePasskey({ recoveryAuthKey, totpCode, credentialId: mode.id });
-      if (!res.ok) {
-        setError(res.error || "Could not remove the passkey.");
-        return;
-      }
-      await reload();
-      resetForm({ kind: "view" });
-      setNotice("Passkey removed.");
-    } finally {
-      setBusy(false);
-    }
-  }
+  const onAdd = (e: React.FormEvent<HTMLFormElement>) =>
+    run(
+      e,
+      () => addPasskey(words, totpCode),
+      hasTotp
+        ? "Passkey added. Signing in with it will also ask for a code from your authenticator."
+        : "Passkey added."
+    );
 
-  async function onToggleTotp(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (mode.kind !== "totp-on" && mode.kind !== "totp-off") return;
+  const onRemove = (e: React.FormEvent<HTMLFormElement>) =>
+    run(
+      e,
+      () =>
+        mode.kind === "remove"
+          ? deletePasskey(words, totpCode, mode.id)
+          : Promise.resolve("Nothing selected to remove."),
+      "Passkey removed."
+    );
+
+  const onToggleTotp = (e: React.FormEvent<HTMLFormElement>) => {
     const enable = mode.kind === "totp-on";
+    e.preventDefault();
     setError(null);
+    // Turning it on is gated on a live code alone, so the words aren't needed.
     if (!enable) {
       const wordsErr = recoveryWordsError(words);
-      if (wordsErr) {
-        setError(wordsErr);
-        return;
-      }
+      if (wordsErr) return setError(wordsErr);
     }
     setBusy(true);
-    try {
-      const res = await setLoginTotpRequired({
-        enable,
-        totpCode,
-        recoveryAuthKey: enable ? undefined : await deriveRecoveryAuthKey(words),
-      });
-      if (!res.ok) {
-        setError(res.error || "Could not change the setting.");
-        return;
+    void (async () => {
+      try {
+        const res = await setLoginTotpRequired({
+          enable,
+          totpCode,
+          recoveryAuthKey: enable ? undefined : await deriveRecoveryAuthKey(words),
+        });
+        if (!res.ok) return setError(res.error || "Could not change the setting.");
+        await reload();
+        resetForm({ kind: "view" });
+        setNotice(
+          enable
+            ? "Every sign-in will now ask for an authenticator code."
+            : "Your original passkey signs you in with one tap again."
+        );
+      } finally {
+        setBusy(false);
       }
-      await reload();
-      resetForm({ kind: "view" });
-      setNotice(
-        enable
-          ? "Every sign-in will now ask for an authenticator code."
-          : "Your original passkey signs you in with one tap again."
-      );
-    } finally {
-      setBusy(false);
-    }
-  }
+    })();
+  };
 
   const gate: GateState = {
     words,
     setWords,
     totpCode,
     setTotpCode,
+    hasTotp,
     busy,
     error,
     onCancel: () => resetForm({ kind: "view" }),
@@ -202,14 +151,21 @@ export default function SettingsPage() {
         onRemove={onRemove}
       />
 
-      <TwoFactorCard
-        passkeys={passkeys}
-        requireTotp={requireTotp}
-        mode={mode}
-        gate={gate}
-        onModeChange={resetForm}
-        onToggle={onToggleTotp}
-      />
+      <AuthenticatorCard hasTotp={hasTotp} onChanged={reload} />
+
+      {/* Only meaningful once there's an authenticator to ask for a code from. */}
+      {hasTotp && (
+        <TwoFactorCard
+          passkeys={passkeys}
+          requireTotp={requireTotp}
+          mode={mode}
+          gate={gate}
+          onModeChange={resetForm}
+          onToggle={onToggleTotp}
+        />
+      )}
+
+      <PasswordCard hasPassword={hasPassword} hasTotp={hasTotp} onChanged={reload} />
     </div>
   );
 }

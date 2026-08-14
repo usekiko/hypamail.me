@@ -1,7 +1,7 @@
 "use client";
 
 import { Button, Card, Chip } from "@heroui/react";
-import { AlertMessage } from "@/components/ui/alert-message";
+import { Alert } from "../../ui/Alert";
 import GateForm, { TotpInput } from "./GateForm";
 import { ROW_CLASS, type GateState, type Mode, type Passkey } from "./types";
 
@@ -71,7 +71,7 @@ export default function TwoFactorCard({
               could lock you out of every future sign-in.
             </p>
             <TotpInput value={totpCode} onChange={setTotpCode} disabled={busy} />
-            {error && <AlertMessage tone="error" style={{ marginBottom: 0 }}>{error}</AlertMessage>}
+            {error && <Alert tone="error" style={{ marginBottom: 0 }}>{error}</Alert>}
             <div className="flex gap-2">
               <Button type="submit" variant="primary" isDisabled={busy || totpCode.length !== 6}>
                 {busy ? "Working…" : "Turn on"}

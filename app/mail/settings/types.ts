@@ -13,16 +13,16 @@ export type Mode =
   | { kind: "totp-on" }
   | { kind: "totp-off" };
 
-/**
- * The recovery-code + authenticator inputs are shared by every destructive
- * action on this page, so the state lives in the page and rides along as one
- * object rather than eight separate props per card.
- */
+// The recovery-code + authenticator inputs are shared by every change on this
+// page, so they ride along as one object rather than eight props per card.
+// hasTotp is false for accounts that never enrolled one — the gate then asks
+// for the recovery code alone, matching what the server accepts.
 export interface GateState {
   words: string;
   setWords: (v: string) => void;
   totpCode: string;
   setTotpCode: (v: string) => void;
+  hasTotp: boolean;
   busy: boolean;
   error: string | null;
   onCancel: () => void;
