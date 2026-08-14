@@ -16,7 +16,7 @@ export function Footer() {
             <img
               loading="lazy"
               decoding="async"
-              src="https://r2.hypastack.com/cdn/fepvmb5y0u31/hypamail.webp"
+              src="https://r2.hypastack.com/cdn/hypamail-logos/hypamail.webp"
               alt="hypamail"
               className="h-8 w-auto object-contain select-none pointer-events-none"
               draggable={false}

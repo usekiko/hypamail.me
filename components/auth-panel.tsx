@@ -17,9 +17,10 @@ export function AuthPanel() {
       <div className="w-full relative z-10">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="https://r2.hypastack.com/cdn/fepvmb5y0u31/hypamail.webp"
+          src="https://r2.hypastack.com/cdn/hypamail-logos/hypamail.webp"
           alt="hypamail"
-          className="h-[96px] w-auto mb-6 object-contain"
+          draggable={false}
+          className="h-[96px] w-auto mb-6 select-none object-contain"
         />
         <h2
           className="text-[18px] font-medium tracking-wide text-[#f7f8f8] mb-5 leading-snug text-left"
@@ -58,9 +59,10 @@ export function AuthColumn({
         <div className="mb-9">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="https://r2.hypastack.com/cdn/fepvmb5y0u31/hypamail.webp"
+            src="https://r2.hypastack.com/cdn/hypamail-logos/hypamail.webp"
             alt="hypamail"
-            className="w-[44px] h-[44px] object-contain"
+            draggable={false}
+            className="w-[44px] h-[44px] select-none object-contain"
           />
         </div>
         <h1

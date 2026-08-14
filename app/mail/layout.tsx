@@ -19,9 +19,10 @@ export default async function MailLayout({ children }: { children: React.ReactNo
           <Link href="/mail" className="flex shrink-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src="https://r2.hypastack.com/cdn/fepvmb5y0u31/hypamail.webp"
+              src="https://r2.hypastack.com/cdn/hypamail-logos/hypamail.webp"
               alt="hypamail"
-              className="block h-7 w-auto sm:h-8"
+              draggable={false}
+              className="block h-7 w-auto select-none sm:h-8"
             />
           </Link>
           <div className="flex min-w-0 items-center gap-2 sm:gap-3">

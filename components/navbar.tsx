@@ -20,7 +20,7 @@ export function Navbar() {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             decoding="async"
-            src="https://r2.hypastack.com/cdn/fepvmb5y0u31/hypamail.webp"
+            src="https://r2.hypastack.com/cdn/hypamail-logos/hypamail.webp"
             alt="hypamail"
             className="w-[32px] h-[32px] object-contain select-none pointer-events-none"
             draggable={false}
@@ -28,7 +28,7 @@ export function Navbar() {
         </Link>
         <div className="flex items-center gap-2">
           <Link href="/login" className={buttonVariants({ variant: "outline", size: "sm" })}>
-            Sign in
+            Log in
           </Link>
           <Link href="/signup" className={buttonVariants({ variant: "primary", size: "sm" })}>
             Create address
