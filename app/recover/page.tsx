@@ -19,14 +19,16 @@ import {
   storeMailKey,
   loadMailKey,
 } from "@/lib/client/crypto";
-import { ShineButton } from "@/components/ui/shine-button";
-import { SecondaryLink } from "@/components/ui/link-button";
-import { TextInput } from "@/components/ui/text-input";
-import { AlertMessage } from "@/components/ui/alert-message";
+import { Instrument_Sans } from "next/font/google";
+import { Button, InputGroup, buttonVariants } from "@heroui/react";
+import { Alert } from "../ui/Alert";
 import { MIcon } from "@/components/ui/material-icon";
-import { AuthColumn, AuthPanel } from "@/components/auth-panel";
+import { DarkAuthColumn } from "../ui/DarkAuthShell";
 import PasskeyHelp from "../ui/PasskeyHelp";
 import RecoveryWordsInput from "../ui/RecoveryWordsInput";
+import "../heroui.css";
+
+const instrumentSans = Instrument_Sans({ subsets: ["latin"], weight: ["400", "500", "600", "700"] });
 
 export default function RecoverPage() {
   const router = useRouter();
@@ -110,103 +112,118 @@ export default function RecoverPage() {
   const footer = (
     <>
       Remembered a device?{" "}
-      <Link href="/login" className="text-[#f7f8f8] font-semibold hover:underline">
-        Back to sign in
+      <Link href="/login" className="text-foreground font-semibold hover:underline">
+        Back to log in
       </Link>
     </>
   );
 
   return (
-    <div className="flex min-h-screen bg-[#151515]">
+    <div className={`${instrumentSans.className} heroui-scope bg-background flex min-h-screen`}>
       {recovered ? (
-        <AuthColumn
+        <DarkAuthColumn
           title="You're back in"
           subtitle="Add a passkey on this device so next time is one tap."
           footer={footer}
         >
-          <p className="text-[13px] text-[#898e97] leading-[1.6] m-0 mb-5">
+          <p className="text-sm text-muted leading-[1.6] m-0 mb-5">
             Enter a fresh code from your authenticator to confirm (this passkey will be a
-            secondary one, so signing in with it will also ask for a code).
+            secondary one, so logging in with it will also ask for a code).
           </p>
           <form onSubmit={onAddPasskey} className="space-y-4">
-            <TextInput
-              inputMode="numeric"
-              pattern="[0-9]{6}"
-              maxLength={6}
-              placeholder="Authenticator code"
-              autoComplete="one-time-code"
-              value={addTotp}
-              onChange={(e) => setAddTotp(e.target.value.replace(/\D/g, ""))}
-              required
+            <InputGroup fullWidth>
+              <InputGroup.Prefix>
+                <MIcon name="pin" size={16} />
+              </InputGroup.Prefix>
+              <InputGroup.Input
+                inputMode="numeric"
+                pattern="[0-9]{6}"
+                maxLength={6}
+                placeholder="Authenticator code"
+                autoComplete="one-time-code"
+                value={addTotp}
+                onChange={(e) => setAddTotp(e.target.value.replace(/\D/g, ""))}
+                required
+                style={{ fontFamily: "ui-monospace, monospace", letterSpacing: "0.2em" }}
+              />
+            </InputGroup>
+            <Button
+              type="submit"
+              variant="primary"
+              size="lg"
+              isDisabled={busy || addTotp.length !== 6}
               fullWidth
-              leading={<MIcon name="pin" size={16} />}
-              style={{ fontFamily: "ui-monospace, monospace", letterSpacing: "0.2em" }}
-            />
-            <ShineButton type="submit" disabled={busy || addTotp.length !== 6} fullWidth>
+            >
               {busy ? "Waiting for your device…" : "Add a passkey on this device"}
-            </ShineButton>
+            </Button>
           </form>
-          <SecondaryLink href="/mail" fullWidth style={{ marginTop: "0.75rem" }}>
+          <Link
+            href="/mail"
+            className={`${buttonVariants({ variant: "outline", size: "lg" })} mt-3 w-full`}
+          >
             Skip, go to inbox
-          </SecondaryLink>
-          {error && <AlertMessage tone="error" style={{ marginTop: 12, marginBottom: 0 }}>{error}</AlertMessage>}
+          </Link>
+          {error && <Alert tone="error" style={{ marginTop: 12, marginBottom: 0 }}>{error}</Alert>}
           <PasskeyHelp />
-        </AuthColumn>
+        </DarkAuthColumn>
       ) : (
-        <AuthColumn
+        <DarkAuthColumn
           title="Account recovery"
-          subtitle="Lost your device? Sign in with your username, your 12 recovery words, and a code from your authenticator app."
+          subtitle="Lost your device? Log in with your username, your 12 recovery words, and a code from your authenticator app."
           footer={footer}
         >
           <form onSubmit={onRecover} className="space-y-4">
             <div>
-              <label className="block text-[13px] font-medium text-[#f7f8f8] mb-2 pl-1" htmlFor="username">
+              <label className="block text-sm font-medium text-foreground mb-2 pl-1" htmlFor="username">
                 Username
               </label>
-              <TextInput
-                id="username"
-                name="username"
-                placeholder="you"
-                autoComplete="username"
-                autoCapitalize="none"
-                required
-                fullWidth
-                leading={<MIcon name="person" size={16} />}
-              />
+              <InputGroup fullWidth>
+                <InputGroup.Prefix>
+                  <MIcon name="person" size={16} />
+                </InputGroup.Prefix>
+                <InputGroup.Input
+                  id="username"
+                  name="username"
+                  placeholder="you"
+                  autoComplete="username"
+                  autoCapitalize="none"
+                  required
+                />
+              </InputGroup>
             </div>
             <div>
-              <label className="block text-[13px] font-medium text-[#f7f8f8] mb-2 pl-1">
+              <label className="block text-sm font-medium text-foreground mb-2 pl-1">
                 Recovery code (12 words)
               </label>
               <RecoveryWordsInput value={words} onChange={setWords} disabled={busy} />
             </div>
             <div>
-              <label className="block text-[13px] font-medium text-[#f7f8f8] mb-2 pl-1" htmlFor="totp">
-                Authenticator code <span className="text-[#8a8f98]">(if you set one up)</span>
+              <label className="block text-sm font-medium text-foreground mb-2 pl-1" htmlFor="totp">
+                Authenticator code <span className="text-muted">(if you set one up)</span>
               </label>
               {/* Not required: accounts that skipped the authenticator have no code
                   to give, and the field is always shown so a blank submission can't
                   reveal whether this account enrolled one. */}
-              <TextInput
-                id="totp"
-                name="totp"
-                inputMode="numeric"
-                pattern="[0-9]{6}"
-                maxLength={6}
-                placeholder="000000"
-                autoComplete="one-time-code"
-                fullWidth
-                style={{ fontFamily: "ui-monospace, monospace", letterSpacing: "0.3em", textAlign: "center" }}
-              />
+              <InputGroup fullWidth>
+                <InputGroup.Input
+                  id="totp"
+                  name="totp"
+                  inputMode="numeric"
+                  pattern="[0-9]{6}"
+                  maxLength={6}
+                  placeholder="000000"
+                  autoComplete="one-time-code"
+                  style={{ fontFamily: "ui-monospace, monospace", letterSpacing: "0.3em", textAlign: "center" }}
+                />
+              </InputGroup>
             </div>
-            {error && <AlertMessage tone="error" style={{ marginBottom: 0 }}>{error}</AlertMessage>}
-            <ShineButton type="submit" disabled={busy} fullWidth>
+            {error && <Alert tone="error" style={{ marginBottom: 0 }}>{error}</Alert>}
+            <Button type="submit" variant="primary" size="lg" isDisabled={busy} fullWidth>
               {busy ? "Checking…" : "Recover account"}
-            </ShineButton>
+            </Button>
           </form>
-        </AuthColumn>
+        </DarkAuthColumn>
       )}
-      <AuthPanel />
     </div>
   );
 }

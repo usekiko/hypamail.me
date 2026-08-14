@@ -30,7 +30,7 @@ import {
   derivePasswordKeys,
   unwrapWithPasswordKey,
 } from "@/lib/client/crypto";
-import { AlertMessage } from "@/components/ui/alert-message";
+import { Alert } from "../ui/Alert";
 import { MIcon } from "@/components/ui/material-icon";
 import { DarkAuthColumn } from "../ui/DarkAuthShell";
 import { legacyLoginAvailable } from "@/constants/legacy";
@@ -46,7 +46,7 @@ type Phase = "idle" | "totp" | "words" | "password";
 const TITLES: Record<Phase, { title: string; subtitle: string }> = {
   idle: {
     title: "Sign in",
-    subtitle: "No passwords here. Your passkey signs you in and decrypts your mail.",
+    subtitle: "One tap signs you in and unlocks your mail.",
   },
   totp: { title: "One more step", subtitle: "Enter the code from your authenticator app." },
   words: { title: "Unlock your mail", subtitle: "One-time step for this browser." },
@@ -277,7 +277,7 @@ export default function LoginPage() {
                 style={{ fontFamily: "ui-monospace, monospace", letterSpacing: "0.3em", textAlign: "center" }}
               />
             </InputGroup>
-            {error && <AlertMessage tone="error" style={{ marginBottom: 0 }}>{error}</AlertMessage>}
+            {error && <Alert tone="error" style={{ marginBottom: 0 }}>{error}</Alert>}
             <Button type="submit" variant="primary" size="lg" isDisabled={busy || totpCode.length !== 6} fullWidth>
               {busy ? "Checking…" : "Verify & sign in"}
             </Button>
@@ -291,7 +291,7 @@ export default function LoginPage() {
               with the passkey alone. Enter your 12 recovery words once to unlock it here.
             </p>
             <RecoveryWordsInput value={words} onChange={setWords} disabled={busy} />
-            {error && <AlertMessage tone="error" style={{ marginBottom: 0 }}>{error}</AlertMessage>}
+            {error && <Alert tone="error" style={{ marginBottom: 0 }}>{error}</Alert>}
             <Button type="submit" variant="primary" size="lg" isDisabled={busy} fullWidth>
               {busy ? "Unlocking…" : "Unlock mail"}
             </Button>
@@ -300,16 +300,20 @@ export default function LoginPage() {
 
         {phase === "idle" && (
           <>
-            <Button variant="primary" size="lg" onPress={onPasskey} isDisabled={busy} fullWidth>
-              <MIcon name="passkey" size={18} style={{ marginRight: 8 }} />
-              {busy ? "Waiting for your device…" : "Sign in with passkey"}
-            </Button>
-            {error && <AlertMessage tone="error" style={{ marginTop: 12, marginBottom: 0 }}>{error}</AlertMessage>}
+            {/* Hidden while the username form is open: Continue runs the same
+                ceremony, just with allowCredentials. */}
+            {!showDevice && (
+              <Button variant="primary" size="lg" onPress={onPasskey} isDisabled={busy} fullWidth>
+                <MIcon name="passkey" size={18} style={{ marginRight: 8 }} />
+                {busy ? "Waiting for your device…" : "Log in with passkey"}
+              </Button>
+            )}
+            {error && <Alert tone="error" style={{ marginTop: 12, marginBottom: 0 }}>{error}</Alert>}
             <FirefoxNote />
 
             {showDevice ? (
-              <form onSubmit={onDevice} className="mt-4 space-y-3">
-                <p className="text-sm text-muted leading-[1.6] m-0">
+              <form onSubmit={onDevice} className="space-y-3">
+                <p className="text-sm text-muted leading-[1.6] m-0 mb-4">
                   Enter your username and we&apos;ll offer your phone (via QR code) or your
                   security key. Your browser can&apos;t find a passkey that lives on another
                   device on its own.
@@ -346,7 +350,7 @@ export default function LoginPage() {
               onClick={() => { setPhase("password"); setError(null); }}
               className="mt-3 block bg-transparent border-0 p-0 text-sm text-muted underline cursor-pointer hover:text-foreground"
             >
-              Sign in with a password instead
+              Log in with a password instead
             </button>
 
             <PasskeyHelp />
@@ -401,9 +405,9 @@ export default function LoginPage() {
               </div>
             )}
             <Button type="submit" variant="primary" size="lg" isDisabled={busy || !pwUser || !pwValue} fullWidth>
-              {busy ? "Signing in…" : "Sign in"}
+              {busy ? "Logging in…" : "Log in"}
             </Button>
-            {error && <AlertMessage tone="error" style={{ marginBottom: 0 }}>{error}</AlertMessage>}
+            {error && <Alert tone="error" style={{ marginBottom: 0 }}>{error}</Alert>}
             <button
               type="button"
               onClick={() => { setPhase("idle"); setError(null); setPwNeedsTotp(false); }}

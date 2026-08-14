@@ -9,7 +9,7 @@
 // Rendered from an effect so the markup matches on the server (where there is no
 // user agent) and only appears for the browsers that actually have the problem.
 import { useEffect, useState } from "react";
-import { AlertMessage } from "@/components/ui/alert-message";
+import { Alert } from "./Alert";
 import { MIcon } from "@/components/ui/material-icon";
 
 export default function FirefoxNote() {
@@ -25,7 +25,7 @@ export default function FirefoxNote() {
   if (!isFirefox) return null;
 
   return (
-    <AlertMessage
+    <Alert
       tone="warning"
       icon={<MIcon name="info" size={16} style={{ flexShrink: 0, marginRight: 8, marginTop: 2 }} />}
       style={{ marginTop: "1rem", marginBottom: 0, fontSize: 13 }}
@@ -34,6 +34,6 @@ export default function FirefoxNote() {
       {isLinux ? " (on Linux it only supports USB security keys)" : ""}. Open hypamail in{" "}
       <b>Chrome or Brave</b> to use your phone, plug in a security key, or use your recovery
       code.
-    </AlertMessage>
+    </Alert>
   );
 }

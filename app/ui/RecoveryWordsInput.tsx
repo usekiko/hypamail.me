@@ -11,14 +11,15 @@ import { isRecoveryWord } from "@/lib/client/crypto";
 
 const COUNT = 12;
 
-// Cells match the TextInput palette so the grid reads as one recessed field.
+// Cells read from HeroUI's field tokens so the grid matches the InputGroups
+// around it, focus ring included.
 const CELL = {
-  bg: "rgba(0,0,0,0.22)",
-  border: "rgba(255,255,255,0.1)",
+  bg: "var(--field-background)",
+  border: "var(--border)",
   badBorder: "rgba(239,68,68,0.5)",
-  number: "#898e97",
+  number: "var(--muted)",
   badNumber: "#f87171",
-  text: "#f7f8f8",
+  text: "var(--foreground)",
 };
 
 // BIP39 words are plain lowercase a-z.
@@ -123,9 +124,9 @@ export default function RecoveryWordsInput({
             alignItems: "center",
             gap: "6px",
             background: CELL.bg,
-            border: `0.7px solid ${isBad(i) ? CELL.badBorder : CELL.border}`,
-            borderRadius: 8,
-            boxShadow: "inset 0 1px 0 0 rgba(255,255,255,0.16), inset 0 -1px 0 0 rgba(255,255,255,0.08)",
+            border: `1px solid ${isBad(i) ? CELL.badBorder : CELL.border}`,
+            borderRadius: "var(--field-radius)",
+            boxShadow: focused === i ? "0 0 0 2px var(--focus)" : undefined,
             padding: "6px 8px",
             // Grid items default to min-width:auto and won't shrink below the
             // input's intrinsic width, which overflows the page on narrow

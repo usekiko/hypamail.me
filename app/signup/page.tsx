@@ -17,7 +17,7 @@ import { Button, InputGroup } from "@heroui/react";
 import Turnstile from "../ui/Turnstile";
 import PasskeyHelp from "../ui/PasskeyHelp";
 import FirefoxNote from "../ui/FirefoxNote";
-import { AlertMessage } from "@/components/ui/alert-message";
+import { Alert } from "../ui/Alert";
 import { MIcon } from "@/components/ui/material-icon";
 import { DarkAuthColumn } from "../ui/DarkAuthShell";
 import { inviteRequired, INVITE_FREE_LABEL } from "@/constants/invite";
@@ -306,7 +306,7 @@ export default function SignupPage() {
     <>
       Already have an account?{" "}
       <Link href="/login" className="text-foreground font-semibold hover:underline">
-        Sign in
+        Log in
       </Link>
     </>
   );
@@ -418,7 +418,7 @@ export default function SignupPage() {
           Skip for now — use my recovery code
         </Button>
 
-        {error && <AlertMessage tone="error" style={{ marginTop: 12, marginBottom: 0 }}>{error}</AlertMessage>}
+        {error && <Alert tone="error" style={{ marginTop: 12, marginBottom: 0 }}>{error}</Alert>}
         <FirefoxNote />
         <PasskeyHelp />
       </Shell>
@@ -529,7 +529,7 @@ export default function SignupPage() {
           >
             Skip — finish without 2FA
           </Button>
-          {error && <AlertMessage tone="error" style={{ marginBottom: 0 }}>{error}</AlertMessage>}
+          {error && <Alert tone="error" style={{ marginBottom: 0 }}>{error}</Alert>}
         </form>
       </Shell>
     );
@@ -542,18 +542,18 @@ export default function SignupPage() {
       footer={signInFooter}
     >
       {!needsInvite && (
-        <AlertMessage
+        <Alert
           tone="info"
           icon={<MIcon name="celebration" size={16} style={{ flexShrink: 0, marginRight: 8, marginTop: 2 }} />}
           className="mb-5"
         >
           Invites are open until {INVITE_FREE_LABEL}. You don&apos;t need a code, just pick a
           username.
-        </AlertMessage>
+        </Alert>
       )}
 
       <form onSubmit={onBegin} className="space-y-4">
-        {error && <AlertMessage tone="error" style={{ marginBottom: 0 }}>{error}</AlertMessage>}
+        {error && <Alert tone="error" style={{ marginBottom: 0 }}>{error}</Alert>}
         <div>
           <label className="block text-sm font-medium text-foreground mb-2 pl-1" htmlFor="username">
             Username

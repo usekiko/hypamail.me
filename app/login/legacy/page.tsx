@@ -15,12 +15,12 @@ import { useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
 import PasskeyHelp from "../../ui/PasskeyHelp";
 import FirefoxNote from "../../ui/FirefoxNote";
-import { ShineButton } from "@/components/ui/shine-button";
-import { SecondaryButton } from "@/components/ui/secondary-button";
-import { TextInput } from "@/components/ui/text-input";
-import { AlertMessage } from "@/components/ui/alert-message";
+import { Instrument_Sans } from "next/font/google";
+import { Button, InputGroup } from "@heroui/react";
+import { Alert } from "@/app/ui/Alert";
 import { MIcon } from "@/components/ui/material-icon";
-import { AuthColumn, AuthPanel } from "@/components/auth-panel";
+import { DarkAuthColumn } from "../../ui/DarkAuthShell";
+import "../../heroui.css";
 import { legacyLoginAvailable, LEGACY_LOGIN_LABEL } from "@/constants/legacy";
 import {
   legacyLoginBegin,
@@ -42,6 +42,8 @@ import {
 
 const DOMAIN = process.env.NEXT_PUBLIC_MAIL_DOMAIN || "hypamail.me";
 
+const instrumentSans = Instrument_Sans({ subsets: ["latin"], weight: ["400", "500", "600", "700"] });
+
 const Shell = ({
   title,
   subtitle,
@@ -53,11 +55,10 @@ const Shell = ({
   footer: React.ReactNode;
   children: React.ReactNode;
 }) => (
-  <div className="flex min-h-screen bg-[#151515]">
-    <AuthColumn title={title} subtitle={subtitle} footer={footer}>
+  <div className={`${instrumentSans.className} heroui-scope bg-background flex min-h-screen`}>
+    <DarkAuthColumn title={title} subtitle={subtitle} footer={footer}>
       {children}
-    </AuthColumn>
-    <AuthPanel />
+    </DarkAuthColumn>
   </div>
 );
 
@@ -231,8 +232,8 @@ export default function LegacyLoginPage() {
   const footer = (
     <>
       Already moved to passkeys?{" "}
-      <Link href="/login" className="text-[#f7f8f8] font-semibold hover:underline">
-        Sign in
+      <Link href="/login" className="text-foreground font-semibold hover:underline">
+        Log in
       </Link>
     </>
   );
@@ -245,10 +246,10 @@ export default function LegacyLoginPage() {
         subtitle="hypamail is passkey-only now."
         footer={footer}
       >
-        <p className="text-[13px] text-[#898e97] leading-[1.6] m-0 mb-4">
+        <p className="text-sm text-muted leading-[1.6] m-0 mb-4">
           The migration window for password-era accounts closed on {LEGACY_LOGIN_LABEL}. If you
           never moved your account to a passkey, email{" "}
-          <a href="mailto:hello@hypamail.me" className="text-[#f7f8f8] underline">
+          <a href="mailto:hello@hypamail.me" className="text-foreground underline">
             hello@hypamail.me
           </a>{" "}
           from another address and we&apos;ll sort it out.
@@ -264,15 +265,15 @@ export default function LegacyLoginPage() {
         subtitle="Your password just worked for the last time."
         footer={footer}
       >
-        <p className="text-[13px] text-[#898e97] leading-[1.6] m-0 mb-6">
+        <p className="text-sm text-muted leading-[1.6] m-0 mb-6">
           From now on you&apos;ll sign in to {wiz?.begin.email} with a passkey: your
           fingerprint, face, or device PIN. Your browser will ask you to create one now.
         </p>
-        <ShineButton onClick={onCreatePasskey} disabled={busy} fullWidth>
+        <Button onPress={onCreatePasskey} isDisabled={busy} variant="primary" size="lg" fullWidth>
           <MIcon name="passkey" size={18} style={{ marginRight: 8 }} />
           {busy ? "Waiting for your device…" : "Create passkey"}
-        </ShineButton>
-        {error && <AlertMessage tone="error" style={{ marginTop: 12, marginBottom: 0 }}>{error}</AlertMessage>}
+        </Button>
+        {error && <Alert tone="error" style={{ marginTop: 12, marginBottom: 0 }}>{error}</Alert>}
         <FirefoxNote />
         <PasskeyHelp />
       </Shell>
@@ -286,9 +287,9 @@ export default function LegacyLoginPage() {
         subtitle="It will not be shown again."
         footer={footer}
       >
-        <p className="text-[13px] text-[#898e97] leading-[1.6] m-0 mb-5">
+        <p className="text-sm text-muted leading-[1.6] m-0 mb-5">
           Write these 12 words down and keep them safe. They are the{" "}
-          <b className="text-[#f7f8f8]">only</b>{" "}
+          <b className="text-foreground">only</b>{" "}
           way back into your account if you lose your devices, and the only backup key to your
           mail. We can&apos;t reset or recover them.
         </p>
@@ -299,19 +300,19 @@ export default function LegacyLoginPage() {
           >
             {wiz.words.split(" ").map((w, i) => (
               <span key={i} className="flex gap-1.5" style={{ minWidth: 0 }}>
-                <span className="text-[#898e97] text-right" style={{ minWidth: "1.6em" }}>{i + 1}.</span>
-                <span className="text-[#f7f8f8]">{w}</span>
+                <span className="text-muted text-right" style={{ minWidth: "1.6em" }}>{i + 1}.</span>
+                <span className="text-foreground">{w}</span>
               </span>
             ))}
           </div>
         </div>
 
-        <SecondaryButton onClick={downloadRecoveryCode} fullWidth style={{ marginBottom: "1rem" }}>
+        <Button onPress={downloadRecoveryCode} variant="outline" size="lg" fullWidth style={{ marginBottom: "1rem" }}>
           <MIcon name="download" size={16} style={{ marginRight: 6 }} />
           {downloaded ? "Downloaded, download again" : "Download recovery code"}
-        </SecondaryButton>
+        </Button>
 
-        <label className="flex items-start gap-2 text-[13px] text-[#f7f8f8] mb-5 cursor-pointer">
+        <label className="flex items-start gap-2 text-sm text-foreground mb-5 cursor-pointer">
           <input
             type="checkbox"
             checked={wordsSaved}
@@ -320,11 +321,17 @@ export default function LegacyLoginPage() {
           />
           <span>I saved my recovery code. I understand it cannot be recovered for me.</span>
         </label>
-        <ShineButton disabled={!wordsSaved || !downloaded} onClick={() => setStep("totp")} fullWidth>
+        <Button
+          variant="primary"
+          size="lg"
+          isDisabled={!wordsSaved || !downloaded}
+          onPress={() => setStep("totp")}
+          fullWidth
+        >
           Continue
-        </ShineButton>
+        </Button>
         {!downloaded && (
-          <p className="text-[12px] text-[#898e97] mt-2.5 text-center">
+          <p className="text-xs text-muted mt-2.5 text-center">
             Download your recovery code to continue.
           </p>
         )}
@@ -339,40 +346,41 @@ export default function LegacyLoginPage() {
         subtitle="Scan this with an authenticator app (Aegis, Ente Auth, Google Authenticator…)."
         footer={footer}
       >
-        <p className="text-[13px] text-[#898e97] leading-[1.6] m-0 mb-5">
+        <p className="text-sm text-muted leading-[1.6] m-0 mb-5">
           It protects account recovery: recovery needs your 12 words{" "}
-          <b className="text-[#f7f8f8]">and</b>{" "}
+          <b className="text-foreground">and</b>{" "}
           a code from this app. Use an authenticator with backups. Losing both your passkeys and
           this app means the account is gone for good.
         </p>
         <div className="bg-white rounded-lg p-2.5 w-fit mx-auto mb-4">
           <canvas ref={qrRef} className="block" />
         </div>
-        <p className="text-[12px] text-[#898e97] m-0 mb-5 text-center">
+        <p className="text-xs text-muted m-0 mb-5 text-center">
           Can&apos;t scan? Enter manually:{" "}
-          <code className="select-all text-[#b9bec6]">{wiz.begin.totpSecret}</code>
+          <code className="select-all text-muted">{wiz.begin.totpSecret}</code>
         </p>
         <form onSubmit={onComplete} className="space-y-4">
           <div>
-            <label className="block text-[13px] font-medium text-[#f7f8f8] mb-2 pl-1">
+            <label className="block text-sm font-medium text-foreground mb-2 pl-1">
               6-digit code from the app
             </label>
-            <TextInput
-              inputMode="numeric"
-              pattern="[0-9]{6}"
-              maxLength={6}
-              placeholder="000000"
-              value={totpCode}
-              onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ""))}
-              required
-              fullWidth
-              style={{ fontFamily: "ui-monospace, monospace", letterSpacing: "0.3em", textAlign: "center" }}
-            />
+            <InputGroup fullWidth>
+              <InputGroup.Input
+                inputMode="numeric"
+                pattern="[0-9]{6}"
+                maxLength={6}
+                placeholder="000000"
+                value={totpCode}
+                onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ""))}
+                required
+                style={{ fontFamily: "ui-monospace, monospace", letterSpacing: "0.3em", textAlign: "center" }}
+              />
+            </InputGroup>
           </div>
-          <ShineButton type="submit" disabled={busy || totpCode.length !== 6} fullWidth>
+          <Button type="submit" isDisabled={busy || totpCode.length !== 6} variant="primary" size="lg" fullWidth>
             {busy ? "Finishing migration…" : "Verify & finish"}
-          </ShineButton>
-          {error && <AlertMessage tone="error" style={{ marginBottom: 0 }}>{error}</AlertMessage>}
+          </Button>
+          {error && <Alert tone="error" style={{ marginBottom: 0 }}>{error}</Alert>}
         </form>
       </Shell>
     );
@@ -384,7 +392,7 @@ export default function LegacyLoginPage() {
       subtitle="One-time sign-in for accounts from the password era."
       footer={footer}
     >
-      <AlertMessage
+      <Alert
         tone="info"
         icon={<MIcon name="schedule" size={16} style={{ flexShrink: 0, marginRight: 8, marginTop: 2 }} />}
         className="mb-5"
@@ -392,49 +400,55 @@ export default function LegacyLoginPage() {
         Password sign-in works here until {LEGACY_LOGIN_LABEL}. You&apos;ll create a passkey and
         your mailbox switches to zero-access encryption. Mail already in your inbox stays
         readable, new mail is encrypted before it touches disk, and your password stops working.
-      </AlertMessage>
+      </Alert>
 
       <form onSubmit={onPassword} className="space-y-4">
         <div>
-          <label className="block text-[13px] font-medium text-[#f7f8f8] mb-2 pl-1" htmlFor="username">
+          <label className="block text-sm font-medium text-foreground mb-2 pl-1" htmlFor="username">
             Username
           </label>
-          <TextInput
-            id="username"
-            name="username"
-            disabled={busy}
-            placeholder="you"
-            autoComplete="username"
-            autoCapitalize="off"
-            autoCorrect="off"
-            spellCheck={false}
-            required
-            fullWidth
-            trailing={<span className="text-[13px] whitespace-nowrap">@{DOMAIN}</span>}
-          />
+          <InputGroup fullWidth>
+            <InputGroup.Input
+              id="username"
+              name="username"
+              disabled={busy}
+              placeholder="you"
+              autoComplete="username"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
+              required
+            />
+            <InputGroup.Suffix>
+              <span className="text-sm whitespace-nowrap text-foreground/70">@{DOMAIN}</span>
+            </InputGroup.Suffix>
+          </InputGroup>
         </div>
         <div>
-          <label className="block text-[13px] font-medium text-[#f7f8f8] mb-2 pl-1" htmlFor="password">
+          <label className="block text-sm font-medium text-foreground mb-2 pl-1" htmlFor="password">
             Password
           </label>
-          <TextInput
-            id="password"
-            name="password"
-            type="password"
-            disabled={busy}
-            placeholder="••••••••"
-            // Unlike the old login form this WANTS the saved password offered —
-            // it's the whole point of the page.
-            autoComplete="current-password"
-            required
-            fullWidth
-            leading={<MIcon name="key" size={16} />}
-          />
+          <InputGroup fullWidth>
+            <InputGroup.Prefix>
+              <MIcon name="key" size={16} />
+            </InputGroup.Prefix>
+            <InputGroup.Input
+              id="password"
+              name="password"
+              type="password"
+              disabled={busy}
+              placeholder="••••••••"
+              // Unlike the old login form this WANTS the saved password offered —
+              // it's the whole point of the page.
+              autoComplete="current-password"
+              required
+            />
+          </InputGroup>
         </div>
-        {error && <AlertMessage tone="error" style={{ marginBottom: 0 }}>{error}</AlertMessage>}
-        <ShineButton type="submit" disabled={busy} fullWidth>
-          {busy ? "Checking…" : "Sign in & start migration"}
-        </ShineButton>
+        {error && <Alert tone="error" style={{ marginBottom: 0 }}>{error}</Alert>}
+        <Button type="submit" isDisabled={busy} variant="primary" size="lg" fullWidth>
+          {busy ? "Checking…" : "Log in & start migration"}
+        </Button>
       </form>
     </Shell>
   );

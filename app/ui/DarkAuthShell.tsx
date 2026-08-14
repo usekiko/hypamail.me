@@ -1,7 +1,7 @@
-// Pitch-black / HeroUI-token variant of components/auth-panel.tsx's
-// AuthColumn, used only by login and signup. Deliberately a separate
-// component rather than a variant prop on the shared one: recover and
-// login/legacy keep the original light-panel look untouched.
+// Pitch-black / HeroUI-token auth shell, shared by login, signup, recover and
+// login/legacy. Separate from components/auth-panel.tsx (which is shared with
+// hypastack) rather than a variant prop on it.
+import LoadingCover from "./LoadingCover";
 
 /** Centred column: logo, heading, and the form itself. */
 export function DarkAuthColumn({
@@ -17,19 +17,21 @@ export function DarkAuthColumn({
 }) {
   return (
     <div className="relative flex flex-1 flex-col items-center justify-center px-8 py-12">
+      <LoadingCover showText={false} minShowMs={350} />
       <div className="relative z-10 w-full max-w-[360px]">
-        <div className="mb-9">
+        <div className="mb-2 flex justify-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="https://r2.hypastack.com/cdn/fepvmb5y0u31/hypamail.webp"
+            src="https://r2.hypastack.com/cdn/hypamail-logos/hypamail.webp"
             alt="hypamail"
-            className="w-[44px] h-[44px] object-contain"
+            draggable={false}
+            className="w-[72px] h-[72px] select-none object-contain"
           />
         </div>
-        <h1 className={`text-[28px] font-semibold tracking-tight text-foreground ${subtitle ? "mb-1" : "mb-6"}`}>
+        <h1 className={`text-center text-[28px] font-semibold tracking-tight text-foreground ${subtitle ? "mb-1" : "mb-6"}`}>
           {title}
         </h1>
-        {subtitle && <p className="text-sm text-muted mb-8">{subtitle}</p>}
+        {subtitle && <p className="text-center text-sm text-muted mb-8">{subtitle}</p>}
         {children}
         <p className="mt-4 text-sm text-muted pl-1">{footer}</p>
       </div>
