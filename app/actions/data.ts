@@ -46,7 +46,7 @@ export async function deleteAccountForever(payload: {
   }
 
   try {
-    await deleteUser(user.id, user.email);
+    await deleteUser(user.id, user.email, user.username);
   } catch {
     return { error: "The mailbox is gone but the account record wasn't removed. Contact us." };
   }

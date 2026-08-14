@@ -57,7 +57,8 @@ export default function DeleteAccountCard({
           Deletes the mailbox and every message in it, your passkeys, and your account record.
           There is no undo and no backup to restore from — your mail is encrypted with a key only
           you hold, so even we can&apos;t recover it afterwards. Export your data first if you want
-          a copy. The address becomes free for someone else to claim.
+          a copy. Your address is retired permanently: nobody can ever register it again, including
+          you, so mail still being sent to it can&apos;t end up in someone else&apos;s inbox.
         </p>
 
         {!open ? (

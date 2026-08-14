@@ -204,6 +204,14 @@ export default function PrivacyPage() {
           <li>Sessions: a maximum of 7 days, and immediately on sign-out or revocation.</li>
           <li>Rate-limiting records: automatically deleted after 24 hours.</li>
           <li>
+            Deleted usernames: kept indefinitely, as a one-way keyed hash rather than the name
+            itself. This is the one thing that outlives account deletion, and it exists so a
+            deleted address can never be registered again — otherwise mail still being sent to
+            your old address would arrive in a stranger&apos;s inbox. It is not linked to anything
+            else we hold and cannot be listed, only checked against a name someone is trying to
+            register.
+          </li>
+          <li>
             Backups: deleted data may persist in encrypted backups for a limited period before
             being overwritten on the ordinary backup cycle.
           </li>
@@ -220,8 +228,9 @@ export default function PrivacyPage() {
           Two of these you can exercise yourself, immediately, without asking us. In{" "}
           <strong className="text-foreground">Settings</strong> you can download everything our
           database holds about your account as a JSON file, and you can delete your account outright
-          — which erases the mailbox, its messages, your passkeys and your account record. For
-          anything else, or if you would rather we did it, write to{" "}
+          — which erases the mailbox, its messages, your passkeys and your account record, and
+          retires the address so that it can never be registered again by anyone. For anything
+          else, or if you would rather we did it, write to{" "}
           <strong className="text-foreground">usekiko@hypamail.me</strong> (or{" "}
           <strong className="text-foreground">id4rp02s@gmail.com</strong> if you get no reply). We
           will respond within one month, as Article 12(3) requires.

@@ -20,10 +20,22 @@ import {
   isRateLimited,
   recordAttempt,
   usernameExists,
+  usernameRetired,
 } from "@/lib/db";
 import type { RegistrationResponseJSON } from "@simplewebauthn/server";
 import { createMailbox } from "./provision";
 import { DOMAIN, SIGNUP_MAX, SIGNUP_WINDOW, clientIp, clientIpHash } from "./shared";
+
+// Live account, live mailbox, or an address that once existed and was deleted —
+// retired names are never reissued, so old mail can't reach a stranger. One
+// message covers all three so signup can't be used to tell them apart.
+async function nameUnavailable(username: string): Promise<boolean> {
+  return (
+    (await usernameExists(username)) ||
+    (await usernameRetired(username)) ||
+    (await usernameTaken(username))
+  );
+}
 
 export interface SignupBeginResult {
   error?: string;
@@ -62,7 +74,7 @@ export async function signupBegin(formData: {
     return { error: "Invalid or already-used invite code." };
   }
 
-  if ((await usernameExists(username)) || (await usernameTaken(username))) {
+  if (await nameUnavailable(username)) {
     await recordAttempt(ipHash, "signup");
     return { error: "That username is already taken." };
   }
@@ -157,7 +169,7 @@ export async function signupComplete(payload: {
     }
   }
 
-  if ((await usernameExists(username)) || (await usernameTaken(username))) {
+  if (await nameUnavailable(username)) {
     return { error: "That username is already taken.", fatal: true };
   }
 

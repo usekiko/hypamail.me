@@ -123,6 +123,15 @@ async function init(): Promise<void> {
     -- Password-era rows can never resolve to a user now, so they're dead weight
     -- that getSession would reject anyway. Drop them rather than leave them to expire.
     DELETE FROM sessions WHERE user_id IS NULL;
+    -- Usernames of deleted accounts. A deleted address is never reissued, so
+    -- old mail addressed to it can't land in a stranger's inbox. Stored as an
+    -- HMAC under the server secret rather than in the clear: it only ever needs
+    -- to be checked, never listed, and keying it stops a leaked dump from being
+    -- run through a dictionary of likely usernames.
+    CREATE TABLE IF NOT EXISTS retired_usernames (
+      username_hash TEXT PRIMARY KEY,
+      retired_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
     CREATE TABLE IF NOT EXISTS auth_attempts (
       ip_hash     TEXT NOT NULL,
       kind        TEXT NOT NULL,
@@ -290,13 +299,25 @@ export async function getAccountExport(userId: string): Promise<Record<string, u
   };
 }
 
-// Erase the account. Credentials and sessions cascade off users(id); the invite
-// row keeps its spent count but loses the email that pointed back here.
-export async function deleteUser(userId: string, email: string): Promise<void> {
+// Erase the account and retire its username for good. Credentials and sessions
+// cascade off users(id); the invite row keeps its spent count but loses the
+// email that pointed back here.
+//
+// The retirement shares the transaction on purpose — if it rolled back on its
+// own the address would quietly become claimable again.
+export async function deleteUser(
+  userId: string,
+  email: string,
+  username: string
+): Promise<void> {
   await db();
   const client = await getPool().connect();
   try {
     await client.query("BEGIN");
+    await client.query(
+      `INSERT INTO retired_usernames (username_hash) VALUES ($1) ON CONFLICT DO NOTHING`,
+      [hashUsername(username)]
+    );
     await client.query(`UPDATE invite_codes SET used_by = NULL WHERE used_by = $1`, [email]);
     await client.query(`DELETE FROM auth_attempts WHERE ip_hash = $1`, [hashIp(`user:${userId}`)]);
     await client.query(`DELETE FROM users WHERE id = $1`, [userId]);
@@ -391,6 +412,22 @@ export async function getUserById(id: string): Promise<UserRow | null> {
 export async function usernameExists(username: string): Promise<boolean> {
   await db();
   const r = await getPool().query(`SELECT 1 FROM users WHERE username = $1`, [username]);
+  return r.rowCount === 1;
+}
+
+function hashUsername(username: string): string {
+  return createHmac("sha256", process.env.SESSION_SECRET || "")
+    .update(`retired-username:${username.trim().toLowerCase()}`)
+    .digest("hex");
+}
+
+// True once an account with this name has been deleted. Permanent by design.
+export async function usernameRetired(username: string): Promise<boolean> {
+  await db();
+  const r = await getPool().query(
+    `SELECT 1 FROM retired_usernames WHERE username_hash = $1`,
+    [hashUsername(username)]
+  );
   return r.rowCount === 1;
 }
 
