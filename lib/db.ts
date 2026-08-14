@@ -147,6 +147,16 @@ function db(): Promise<void> {
   return ready;
 }
 
+// Key for every keyed hash in here: IPs, retired usernames, the password-salt
+// decoy. Throws rather than defaulting to "" — an empty key is one an attacker
+// can reproduce, which would turn the decoy into a user-enumeration oracle and
+// make the hashed IPs and usernames trivially reversible.
+function hmacKey(): string {
+  const secret = process.env.SESSION_SECRET;
+  if (!secret) throw new Error("SESSION_SECRET not set");
+  return secret;
+}
+
 // ---------- invite codes (stored hashed) ----------
 
 function hashInvite(code: string): string {
@@ -363,7 +373,7 @@ export async function getPasswordSalt(username: string): Promise<string> {
   );
   const real = r.rowCount === 1 ? (r.rows[0].password_salt as string | null) : null;
   if (real) return real;
-  return createHmac("sha256", process.env.SESSION_SECRET || "")
+  return createHmac("sha256", hmacKey())
     .update(`password-salt-decoy:${username}`)
     .digest("base64url")
     .slice(0, 22);
@@ -416,7 +426,7 @@ export async function usernameExists(username: string): Promise<boolean> {
 }
 
 function hashUsername(username: string): string {
-  return createHmac("sha256", process.env.SESSION_SECRET || "")
+  return createHmac("sha256", hmacKey())
     .update(`retired-username:${username.trim().toLowerCase()}`)
     .digest("hex");
 }
@@ -610,8 +620,7 @@ export async function revokeSession(jti: string): Promise<void> {
 // never store raw addresses. SESSION_SECRET is the HMAC key, so hashes can't be
 // reversed/rainbow-tabled without it.
 export function hashIp(ip: string): string {
-  const key = process.env.SESSION_SECRET || "";
-  return createHmac("sha256", key).update(ip).digest("hex");
+  return createHmac("sha256", hmacKey()).update(ip).digest("hex");
 }
 
 // True if this key has made >= `max` attempts of `kind` within `windowSecs`.
