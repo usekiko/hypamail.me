@@ -91,6 +91,9 @@ export default function LoadingCover({
       </div>
 
       <style>{`
+        /* opacity/transform only. Animating filter (blur + drop-shadow) made
+           mobile Safari rasterise the transparent PNG as a white box, and it
+           skipped the blur interpolation outright. */
         .hm-cover { transition: opacity 600ms cubic-bezier(.4,0,.2,1); }
         .hm-cover--out { opacity: 0; }
         .hm-cover--out .hm-intro { animation: hm-lift 600ms cubic-bezier(.7,0,.3,1) forwards; }
@@ -98,7 +101,6 @@ export default function LoadingCover({
         .hm-mark {
           opacity: 0;
           animation: hm-mark-in 900ms cubic-bezier(.16,1,.3,1) forwards;
-          filter: drop-shadow(0 0 18px rgba(255,255,255,.35));
         }
 
         .hm-status { opacity: 0; animation: hm-fade-in 600ms ease 320ms forwards; }
@@ -110,9 +112,8 @@ export default function LoadingCover({
         .hm-dots span:nth-child(3) { animation-delay: .5s; }
 
         @keyframes hm-mark-in {
-          0%   { opacity: 0; transform: scale(.82); filter: blur(12px) drop-shadow(0 0 0 rgba(255,255,255,0)); }
-          60%  { opacity: 1; filter: blur(0) drop-shadow(0 0 26px rgba(255,255,255,.45)); }
-          100% { opacity: 1; transform: scale(1); filter: blur(0) drop-shadow(0 0 18px rgba(255,255,255,.35)); }
+          0%   { opacity: 0; transform: scale(.86); }
+          100% { opacity: 1; transform: scale(1); }
         }
         @keyframes hm-fade-in { to { opacity: 1; } }
         @keyframes hm-dot {
@@ -121,12 +122,12 @@ export default function LoadingCover({
           100%     { opacity: 0; }
         }
         @keyframes hm-lift {
-          to { opacity: 0; transform: scale(1.18); filter: blur(6px); }
+          to { opacity: 0; transform: scale(1.14); }
         }
 
         @media (prefers-reduced-motion: reduce) {
           .hm-mark, .hm-status, .hm-cover--out .hm-intro { animation: none; }
-          .hm-mark, .hm-status { opacity: 1; filter: none; }
+          .hm-mark, .hm-status { opacity: 1; }
           .hm-dots span { animation: none; opacity: 1; }
         }
       `}</style>
