@@ -1,11 +1,9 @@
 "use client";
 
-// Explicitly-rendered Cloudflare Turnstile widget. The implicit (auto-scan)
-// mode only renders on a full page load, so reaching the signup page via a
-// client-side navigation left the widget missing and the token empty. Explicit
-// render on mount works every time, and re-mounts (wizard restarts) get a
-// fresh widget. The widget injects the hidden `cf-turnstile-response` input
-// into the surrounding form, so callers keep reading it from FormData.
+// Explicitly-rendered Turnstile. The auto-scan mode only fires on a full page
+// load, so arriving at signup via client-side navigation left the token empty.
+// Rendering on mount works every time, and a wizard restart gets a fresh widget.
+// It injects the hidden cf-turnstile-response input into the surrounding form.
 import Script from "next/script";
 import { useEffect, useRef, useState } from "react";
 

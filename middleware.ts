@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 
-// Strict security headers for the whole site (Next 16 middleware — renamed from
-// proxy.ts due to Turbopack detection bug in Next 16.2). The CSP uses a
-// per-request nonce (Next applies it to its own scripts automatically when it
-// sees the CSP on the request) so we never need 'unsafe-inline' for scripts.
+// Security headers for the whole site. The CSP carries a per-request nonce —
+// Next applies it to its own scripts once it sees the CSP on the request — so
+// scripts never need 'unsafe-inline'.
 //
-// img-src allows only our own origin + the hypastack R2 CDN (landing logo).
-// Email images can never load regardless: the email sanitizer strips every
-// <img> before render, so tracking pixels are blocked even though the app
-// itself may show a logo.
+// img-src is our own origin plus the R2 CDN the logo lives on. Email images
+// can't load either way: the sanitizer strips every <img> before render.
+//
+// Next 16.2 warns that this file should be called proxy.ts. Renaming it tripped
+// a Turbopack detection bug, so it stays middleware.ts until that's fixed.
 export default function middleware(request: NextRequest) {
   const nonce = btoa(crypto.randomUUID());
 
@@ -39,12 +39,10 @@ export default function middleware(request: NextRequest) {
   h.set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
   h.set("X-Content-Type-Options", "nosniff");
   h.set("X-Frame-Options", "DENY");
-  // NOT "no-referrer": per the Fetch spec a non-GET request under a no-referrer
-  // policy is sent with `Origin: null`, which trips Next.js's Server Action
-  // same-origin (CSRF) check ("x-forwarded-host does not match origin") and
-  // aborts every form action. "same-origin" still sends zero referrer to any
-  // external site (email links also carry rel="noreferrer") but keeps a valid
-  // Origin on our own POSTs so server actions work.
+  // NOT "no-referrer". Per the Fetch spec that sends non-GET requests with
+  // `Origin: null`, which trips Next's server-action CSRF check and kills every
+  // form action. "same-origin" still leaks nothing to external sites but keeps
+  // a valid Origin on our own POSTs.
   h.set("Referrer-Policy", "same-origin");
   h.set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), browsing-topics=()");
   h.set("Cross-Origin-Opener-Policy", "same-origin");

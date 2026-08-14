@@ -1,15 +1,11 @@
 // Browser-side mail decryption + sanitization.
 //
-// Stalwart stores every delivered message as PGP/MIME (multipart/encrypted):
-// cleartext top-level headers (From/Subject/Date), encrypted body. We download
-// the raw blob, decrypt the octet-stream part with the user's private key, and
-// parse the inner MIME for the real body. Messages that predate encryption (or
-// arrived through some other path) parse as regular MIME and skip the decrypt.
+// Stalwart stores deliveries as PGP/MIME: cleartext headers, encrypted body. We
+// pull the raw blob, decrypt the octet-stream part, and parse the inner MIME.
+// Anything predating encryption parses as ordinary MIME and skips the decrypt.
 //
-// Sanitization mirrors the strict server allowlist this app has always used:
-// text-formatting tags only — no images, scripts, styles, forms, or embedded
-// content of any kind, so tracking pixels and malicious markup are stripped
-// before anything touches the DOM. Links open in a new tab with no referrer.
+// The allowlist is text-formatting tags only — no images, scripts, styles or
+// embeds — so tracking pixels are gone before the DOM ever sees them.
 import * as openpgp from "openpgp";
 import PostalMime, { type Email } from "postal-mime";
 import DOMPurify from "dompurify";

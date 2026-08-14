@@ -1,13 +1,9 @@
 "use client";
 
-// Firefox can't reach a passkey stored on a phone: it doesn't implement the
-// hybrid (caBLE) transport that draws the QR code, and on Linux it has no
-// platform passkey store at all — Mozilla supports only USB security keys there.
-// Nothing we send changes that, so tell affected users instead of letting them
-// stare at a prompt that never offers their phone.
-//
-// Rendered from an effect so the markup matches on the server (where there is no
-// user agent) and only appears for the browsers that actually have the problem.
+// Firefox can't reach a passkey on a phone — no hybrid (caBLE) transport, and
+// on Linux no platform passkey store at all, only USB keys. Nothing we send
+// changes that, so say so rather than let people stare at a prompt that never
+// offers their phone. Rendered from an effect so the server markup matches.
 import { useEffect, useState } from "react";
 import { Alert } from "./Alert";
 import { MIcon } from "@/components/ui/material-icon";

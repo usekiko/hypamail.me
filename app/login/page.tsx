@@ -1,11 +1,11 @@
 "use client";
 
-// Passwordless login. One passkey tap signs you in and (via the PRF extension)
-// unlocks your mail key in the same gesture.
+// Login. One passkey tap signs you in and, via PRF, unlocks the mail key in the
+// same gesture.
 //   - Original (signup) passkey → straight to the inbox.
-//   - A passkey you added later → we also ask for a TOTP code before letting you
-//     in (proving possession isn't enough for a secondary device).
-//   - No-PRF browsers → after sign-in, unlock mail once with the recovery words.
+//   - A passkey added later → also asks for a code, if the account has an
+//     authenticator (possession alone isn't enough for a secondary device).
+//   - No-PRF browsers → unlock once with the recovery words after signing in.
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";

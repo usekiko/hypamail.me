@@ -1,13 +1,10 @@
-// Revocable, server-backed session. The cookie carries ONLY an opaque session id
-// (jti), JWE-encrypted (AES-256-GCM) and httpOnly+secure. The session row maps
-// to a user; the user's internal Stalwart credential is stored encrypted on the
-// users table. Because mail is encrypted at rest with the user's own PGP key,
-// that credential only ever unlocks ciphertext — the server (and anyone who
-// compromises it) cannot read stored mail.
+// Revocable, server-backed sessions. The cookie holds only an opaque jti,
+// JWE-encrypted and httpOnly+secure; the row maps it to a user. The internal
+// Stalwart credential sits encrypted on the users table and only ever unlocks
+// ciphertext, so compromising the server still doesn't read anyone's mail.
 //
-// This module also issues short-lived "ceremony" cookies used to carry WebAuthn
-// challenges (and, during signup, the pending TOTP secret) between the begin and
-// complete steps of an auth ceremony without a server-side table.
+// Also issues short-lived "ceremony" cookies that carry state between the begin
+// and complete halves of a flow, so those need no server-side table.
 import { EncryptJWT, jwtDecrypt, type JWTPayload } from "jose";
 import { cookies } from "next/headers";
 import { createHash } from "crypto";
@@ -87,20 +84,19 @@ export async function destroySession(): Promise<void> {
   (await cookies()).delete(COOKIE);
 }
 
-// ---------- ceremony cookies (WebAuthn challenges & signup state) ----------
+// ---------- ceremony cookies (WebAuthn challenges & pending state) ----------
 
 export interface CeremonyData extends JWTPayload {
-  kind: "signup" | "login" | "login-totp" | "recovery" | "add-passkey" | "legacy";
+  kind: "signup" | "login" | "login-totp" | "add-passkey" | "enroll-totp" | "legacy";
   challenge: string;
   username?: string;
   invite?: string;
-  totpSecret?: string; // base32, pending user confirmation during signup
+  totpSecret?: string; // base32, pending user confirmation
   userId?: string;
   credentialId?: string; // the passkey already verified, carried into the TOTP step
-  // Legacy migration only: the password the user just proved, carried to the
-  // complete step so encryption can be enabled with their own credentials before
-  // the account is rotated to an internal one. Same exposure as the password-era
-  // session rows (enc_password), but JWE-encrypted, httpOnly and 15-minute.
+  // Legacy migration only: the password just proved, carried over so encryption
+  // can be enabled with the user's own credentials before the account is rotated
+  // to an internal one. JWE-encrypted, httpOnly, 15 minutes.
   legacyPassword?: string;
 }
 

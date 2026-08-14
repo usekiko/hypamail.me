@@ -1,7 +1,6 @@
-// TOTP (RFC 6238) helpers for the mandatory second factor on recovery login.
-// The shared secret is generated here, shown to the user once during signup
-// (QR + base32), and stored AES-encrypted in the users table. It is an auth
-// gate only — it plays no part in mail encryption.
+// TOTP (RFC 6238). Optional per account; when set it gates recovery, password
+// sign-in, and any passkey added after signup. Auth only — the secret plays no
+// part in mail encryption, so adding or dropping it never rewraps a key.
 import { TOTP, Secret } from "otpauth";
 import { randomBytes } from "crypto";
 

@@ -1,11 +1,10 @@
 "use client";
 
-// Account recovery: username + 12 recovery words + mandatory TOTP.
-// The words never leave the browser — only a derived auth key does (HKDF with
-// a different context than the key-unwrap derivation, so the server-side
-// verifier can't decrypt anything). After recovery we offer to add a passkey
-// for this device; because adding a passkey always needs recovery + TOTP, we
-// reuse the recovery proof and just ask for a fresh authenticator code.
+// Account recovery: username + 12 recovery words, plus a code if the account
+// enrolled an authenticator. The words never leave the browser — only a derived
+// auth key does, split off by HKDF with a different context than the unwrap key,
+// so the server's verifier can't decrypt anything. Afterwards we offer to add a
+// passkey for this device, reusing the proof the user just gave.
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";

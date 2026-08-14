@@ -1,15 +1,11 @@
-// Server-side secret encryption (AES-256-GCM) for values that must live in the
-// DB but shouldn't be readable from a DB dump alone: the internal Stalwart mail
-// password and each user's TOTP secret. NOTE: these are *server* secrets — the
-// mail password only grants access to PGP ciphertext, and the TOTP secret is an
-// auth gate, not key material. User mail keys are wrapped client-side and never
-// touch this module.
+// AES-256-GCM for the two server-side secrets that live in the DB: the internal
+// Stalwart mail password and each user's TOTP secret. Neither is key material —
+// the mail password only unlocks ciphertext. User mail keys are wrapped in the
+// browser and never touch this module.
 import { createHash, randomBytes, createCipheriv, createDecipheriv } from "crypto";
 
-// Key for encrypting stored server-side secrets. Derived from a dedicated
-// CREDENTIAL_SECRET when set (lets you keep it off the DB host for full
-// separation), otherwise a distinct subkey of SESSION_SECRET so it is never the
-// same bytes as the session-cookie key.
+// Prefers a dedicated CREDENTIAL_SECRET (keep it off the DB host), otherwise a
+// distinct subkey of SESSION_SECRET — never the same bytes as the cookie key.
 function credKey(): Buffer {
   const secret = process.env.CREDENTIAL_SECRET || process.env.SESSION_SECRET;
   if (!secret) throw new Error("CREDENTIAL_SECRET/SESSION_SECRET not set");

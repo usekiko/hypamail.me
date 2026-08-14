@@ -1,13 +1,12 @@
 "use client";
 
-// Passwordless signup wizard:
+// Signup wizard:
 //   1. username + invite + Turnstile
-//   2. create a passkey (browser dialog)
-//   3. save the 12-word recovery code (generated locally, never sent anywhere)
-//   4. mandatory authenticator (TOTP) enrollment — QR + verify code
-// While the user reads the words, the browser has already generated the PGP
-// mail keypair and wrapped its private key; the server only ever receives
-// wrapped blobs and the public key.
+//   2. passkey, password, or neither — all optional
+//   3. save the 12-word recovery code (the one thing you can't skip)
+//   4. authenticator, if they want one — QR + verify code
+// The PGP keypair is generated and wrapped while the user is still reading the
+// words, so the server only ever receives blobs and the public key.
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -69,9 +68,8 @@ const Shell = ({
   </div>
 );
 
-// "secure" replaces the old mandatory "passkey" step: passkey, password, or
-// neither. The recovery code ("words") is the one step nobody can skip — it is
-// what guarantees an account always has a way back in.
+// "secure" is passkey, password, or neither. "words" is the one step nobody can
+// skip — it's what guarantees every account has a way back in.
 type Step = "form" | "secure" | "words" | "totp";
 
 interface WizardState {
@@ -183,8 +181,8 @@ export default function SignupPage() {
     let wrappedKeyPassword: string | null = null;
     if (withPassword) {
       passwordSalt = generatePasswordSalt();
-      // One PBKDF2 pass, split two ways: the auth half goes to the server, the
-      // wrap half stays here and never leaves the device.
+      // Two PBKDF2 passes, one per half. Slow, but this only runs once and it
+      // keeps the wrap half from ever existing outside this block.
       passwordAuthKey = await derivePasswordAuthKey(password, passwordSalt);
       wrappedKeyPassword = await wrapWithPassword(password, passwordSalt, privateKey);
     }

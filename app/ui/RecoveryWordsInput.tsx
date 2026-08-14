@@ -1,11 +1,9 @@
 "use client";
 
-// Numbered 12-word recovery-code entry. Type a word and press space or enter to
-// hop to the next numbered row; backspace on an empty row goes back. Pasting the
-// whole code into any row spreads it across the remaining rows.
-//
-// The value is the space-joined words, so callers keep treating it as one string
-// (the crypto helpers normalise whitespace anyway).
+// Numbered 12-word recovery-code entry. Space or enter hops to the next row,
+// backspace on an empty row goes back, and pasting the whole code into any row
+// spreads it across the rest. The value is the space-joined words, so callers
+// still treat it as one string.
 import { useRef, useState } from "react";
 import { isRecoveryWord } from "@/lib/client/crypto";
 

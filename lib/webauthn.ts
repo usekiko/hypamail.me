@@ -1,11 +1,10 @@
-// WebAuthn (passkeys) server side, wrapping @simplewebauthn/server.
+// WebAuthn server side, over @simplewebauthn/server.
 //
-// PRF note: every credential is registered with the PRF extension using ONE
-// app-wide salt (below). PRF output is keyed per-credential by the
-// authenticator, so a fixed salt is safe — and it lets usernameless
-// (discoverable) login evaluate PRF without knowing which credential the user
-// will pick. The browser derives an AES key from the PRF output and unwraps the
-// user's mail key locally; the server only ever stores the wrapped blob.
+// Every credential registers PRF with one app-wide salt. That's safe because
+// the authenticator keys PRF output per credential anyway, and it lets
+// usernameless login evaluate PRF without knowing which passkey the user picks.
+// The browser turns that output into an AES key and unwraps the mail key
+// locally; the server only ever stores the wrapped blob.
 import {
   generateRegistrationOptions,
   verifyRegistrationResponse,

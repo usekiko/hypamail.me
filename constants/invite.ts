@@ -1,8 +1,6 @@
-// Open-signup window: invite codes aren't required until this moment.
-//
-// The server action enforces this and the register form only reflects it (a
-// greyed-out field stops nobody who crafts their own POST), so both read this
-// one constant and can't drift apart.
+// Open-signup window: invite codes aren't required until this moment. The
+// server action enforces it and the form only reflects it, but both read this
+// one constant so they can't drift apart.
 export const INVITE_FREE_UNTIL = new Date("2026-08-30T00:00:00Z");
 
 // Rendered in the register form's notice. Hardcoded rather than formatted from

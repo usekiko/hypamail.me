@@ -104,10 +104,8 @@ export async function provisionAccount(username: string, password: string): Prom
   return accountId;
 }
 
-// Replace an account's password (registry API, same credential shape as
-// provisionAccount). Used once per legacy migration: the user proved they hold
-// the old password, and from here the mailbox is owned by a random internal
-// credential that only ever unlocks ciphertext — the password era ends here.
+// Replace an account's password. Used once per legacy migration: from here the
+// mailbox is owned by a random internal credential and the old password is gone.
 export async function rotateAccountPassword(username: string, password: string): Promise<void> {
   const id = await accountRegistryId(username);
   if (!id) throw new Error("account not found");
@@ -130,10 +128,9 @@ export async function deleteAccount(username: string): Promise<void> {
   await jmap(adminAuth(), USING_ADMIN, [["x:Account/set", { destroy: [id] }, "0"]]);
 }
 
-// Upload the user's PGP public key and switch the account to encryption-at-rest.
-// Runs with the *user's own* credentials (self-service permissions). From this
-// point every message Stalwart stores for this account — SMTP deliveries and
-// client appends alike — is PGP ciphertext only the browser can open.
+// Upload the PGP public key and turn on encryption-at-rest. Runs with the
+// user's own credentials (self-service), and from here everything Stalwart
+// stores for the account is ciphertext only their browser can open.
 export async function uploadEncryptionKey(
   email: string,
   password: string,

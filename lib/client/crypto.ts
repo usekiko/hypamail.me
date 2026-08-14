@@ -1,28 +1,21 @@
-// Browser-side cryptography. Everything in this file runs on the user's device;
-// none of the derived keys here ever leave it (only *wrapped* blobs and the
-// recovery *auth* key do). This is the heart of the zero-access design:
+// Browser-side crypto. Nothing derived here leaves the device — only wrapped
+// blobs and the auth halves do. Three ways to unlock the same PGP private key:
 //
-//   recovery entropy (12 words, 128-bit)
-//     ├─ HKDF "recovery-auth" → authKey   → sent to server, stored hashed
-//     │                                     (login proof; useless for decryption)
-//     └─ HKDF "recovery-wrap" → wrapKey   → encrypts the PGP private key locally
+//   recovery words (128-bit)
+//     ├─ HKDF "recovery-auth" → authKey → server, stored hashed
+//     └─ HKDF "recovery-wrap" → wrapKey → encrypts the private key
 //
 //   passkey PRF output (per credential, fixed app salt)
-//     └─ HKDF "prf-wrap"      → wrapKey   → same private key, wrapped per passkey
+//     └─ HKDF "prf-wrap"      → wrapKey
 //
-//   password (optional, per-user random salt)
+//   password (optional, per-user salt)
 //     └─ PBKDF2-SHA256 → master
-//         ├─ HKDF "password-auth" → authKey → sent to server, stored hashed
-//         └─ HKDF "password-wrap" → wrapKey → same private key, wrapped again
+//         ├─ HKDF "password-auth" → authKey → server, stored hashed
+//         └─ HKDF "password-wrap" → wrapKey
 //
-// The password branch runs PBKDF2 first because a chosen password carries far
-// less entropy than the 12-word code; the recovery/PRF branches feed HKDF
-// directly since their inputs are already uniformly random. The password itself
-// never leaves the device — only the derived authKey does, exactly as with the
-// recovery code, so the server still cannot unwrap anything.
-//
-// The PGP private key decrypts mail that Stalwart encrypted on arrival with the
-// matching public key. The server holds only ciphertext + wrapped blobs.
+// Only the password branch needs PBKDF2 — the other two inputs are already
+// uniformly random. Splitting auth from wrap with different info strings is what
+// keeps the server's copy useless for decryption.
 import * as openpgp from "openpgp";
 import { entropyToMnemonic, mnemonicToEntropy, validateMnemonic } from "@scure/bip39";
 import { wordlist } from "@scure/bip39/wordlists/english.js";
@@ -97,10 +90,9 @@ export function isRecoveryWord(word: string): boolean {
 }
 
 // Slot indices (0-based) of filled-in words that aren't on the BIP39 list.
-// NOTE: naming the offending word is deliberate and safe — this check is purely
-// local (it never reaches the server) and the wordlist is public, so an attacker
-// can already run it offline. All it does is save a user hunting a typo across
-// twelve words. The *server's* answer stays deliberately vague; see manageGate.
+// Pointing at the bad word is fine: the check is local and the wordlist public,
+// so this leaks nothing an attacker couldn't run offline — it just saves hunting
+// a typo across twelve rows. The server's own answers stay vague on purpose.
 export function invalidRecoveryWordIndices(words: string): number[] {
   return words
     .split(" ")
@@ -346,10 +338,9 @@ export async function webauthnCreate(optionsJSON: unknown): Promise<CreateResult
   };
 }
 
-// Evaluate PRF locally without a server round-trip. The assertion is discarded
-// — PRF output depends only on the credential and our fixed salt, so a random
-// self-generated challenge is fine. Used to re-unlock the mail key in a fresh
-// tab when a server session already exists.
+// Evaluate PRF without a server round-trip — the assertion is thrown away, so a
+// self-generated challenge is fine (PRF output depends only on the credential
+// and our fixed salt). Re-unlocks the mail key in a fresh tab.
 export async function localPrfGet(): Promise<{ credentialId: string; prfOutput: ArrayBuffer | null }> {
   const challenge = crypto.getRandomValues(new Uint8Array(32));
   const cred = (await navigator.credentials.get({
