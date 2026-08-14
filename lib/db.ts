@@ -28,7 +28,11 @@ async function init(): Promise<void> {
       code_hash   TEXT PRIMARY KEY,
       created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
       used_at     TIMESTAMPTZ,
-      used_by     TEXT
+      used_by     TEXT,
+      -- Multi-use invites: a code is spent when use_count reaches max_uses.
+      -- max_uses = 1 reproduces the original one-shot behaviour exactly.
+      max_uses    INTEGER NOT NULL DEFAULT 1 CHECK (max_uses >= 1),
+      use_count   INTEGER NOT NULL DEFAULT 0 CHECK (use_count >= 0)
     );
     -- Upgrade from the plaintext-code era. CREATE TABLE IF NOT EXISTS above is a
     -- no-op on a database that already has the old table, so the rename has to be
@@ -41,6 +45,21 @@ async function init(): Promise<void> {
                     AND column_name = 'code') THEN
         ALTER TABLE invite_codes RENAME COLUMN code TO code_hash;
         UPDATE invite_codes SET code_hash = encode(sha256(code_hash::bytea), 'hex');
+      END IF;
+    END $$;
+    -- Upgrade from the one-shot-only era. Same story as above: the CREATE is a
+    -- no-op on an existing table, so add the columns explicitly. Every code that
+    -- predates multi-use keeps max_uses = 1, and one that was already redeemed
+    -- (used_at set) backfills to use_count = 1, so it stays spent.
+    DO $$
+    BEGIN
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                      WHERE table_schema = 'public' AND table_name = 'invite_codes'
+                        AND column_name = 'max_uses') THEN
+        ALTER TABLE invite_codes
+          ADD COLUMN max_uses  INTEGER NOT NULL DEFAULT 1 CHECK (max_uses >= 1),
+          ADD COLUMN use_count INTEGER NOT NULL DEFAULT 0 CHECK (use_count >= 0);
+        UPDATE invite_codes SET use_count = 1 WHERE used_at IS NOT NULL;
       END IF;
     END $$;
     CREATE TABLE IF NOT EXISTS users (
@@ -119,12 +138,19 @@ function hashInvite(code: string): string {
   return createHash("sha256").update(code.trim()).digest("hex");
 }
 
-// Atomically consume an unused invite code. Returns true if it was valid+unused.
+// Atomically claim one use of an invite code. Returns true if a slot was free.
+//
+// The guard lives in the UPDATE itself rather than a read-then-write: under READ
+// COMMITTED a second transaction targeting the same row blocks on the row lock,
+// then re-evaluates `use_count < max_uses` against the committed new value. So
+// two people racing for the last slot of a 10-use code can never both win.
 export async function consumeInviteCode(code: string, usedBy: string): Promise<boolean> {
   await db();
   const r = await getPool().query(
-    `UPDATE invite_codes SET used_at = now(), used_by = $2
-     WHERE code_hash = $1 AND used_at IS NULL RETURNING code_hash`,
+    `UPDATE invite_codes
+        SET use_count = use_count + 1, used_at = now(), used_by = $2
+      WHERE code_hash = $1 AND use_count < max_uses
+      RETURNING code_hash`,
     [hashInvite(code), usedBy]
   );
   return r.rowCount === 1;
@@ -134,33 +160,41 @@ export async function consumeInviteCode(code: string, usedBy: string): Promise<b
 export async function inviteCodeUsable(code: string): Promise<boolean> {
   await db();
   const r = await getPool().query(
-    `SELECT 1 FROM invite_codes WHERE code_hash = $1 AND used_at IS NULL`,
+    `SELECT 1 FROM invite_codes WHERE code_hash = $1 AND use_count < max_uses`,
     [hashInvite(code)]
   );
   return r.rowCount === 1;
 }
 
-export async function createInviteCodes(codes: string[]): Promise<void> {
+export async function createInviteCodes(codes: string[], maxUses = 1): Promise<void> {
   await db();
   await getPool().query(
-    `INSERT INTO invite_codes (code_hash) SELECT unnest($1::text[]) ON CONFLICT DO NOTHING`,
-    [codes.map(hashInvite)]
+    `INSERT INTO invite_codes (code_hash, max_uses)
+     SELECT unnest($1::text[]), $2 ON CONFLICT DO NOTHING`,
+    [codes.map(hashInvite), Math.max(1, Math.trunc(maxUses))]
   );
 }
 
 // Generate `count` cryptographically-random invite codes (96-bit), store their
 // hashes, and return the plaintext codes (the only time they exist in the clear).
-export async function generateInviteCodes(count = 1): Promise<string[]> {
+export async function generateInviteCodes(count = 1, maxUses = 1): Promise<string[]> {
   const codes = Array.from({ length: count }, () => randomBytes(12).toString("hex"));
-  await createInviteCodes(codes);
+  await createInviteCodes(codes, maxUses);
   return codes;
 }
 
 // Undo a consume (used when account provisioning fails after the code was taken).
+// Hands back exactly the one slot this signup took — blanking the row instead
+// would refund every use of a multi-use code. used_at/used_by describe the most
+// recent successful use, so they only reset once the code is fully unused again.
 export async function releaseInviteCode(code: string): Promise<void> {
   await db();
   await getPool().query(
-    `UPDATE invite_codes SET used_at = NULL, used_by = NULL WHERE code_hash = $1`,
+    `UPDATE invite_codes
+        SET use_count = GREATEST(use_count - 1, 0),
+            used_at   = CASE WHEN use_count - 1 <= 0 THEN NULL ELSE used_at END,
+            used_by   = CASE WHEN use_count - 1 <= 0 THEN NULL ELSE used_by END
+      WHERE code_hash = $1`,
     [hashInvite(code)]
   );
 }
