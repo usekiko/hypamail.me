@@ -1,14 +1,10 @@
-// Postgres for users, passkey credentials, invite codes, revocable sessions,
-// and login rate-limiting. Schema is created on first use.
+// Postgres: users, passkey credentials, invite codes, revocable sessions, rate
+// limiting. Schema is created on first use.
 //
-// Zero-access design notes:
-//   - users.wrapped_key_* hold the user's PGP private key encrypted with keys
-//     the server never sees (passkey PRF output / recovery-code derivation).
-//   - users.recovery_auth_hash is SHA-256 of a *derived* auth key, split from
-//     the same recovery code by HKDF with a different info string, so this
-//     verifier is useless for decrypting the wrapped private key.
-//   - invite codes are stored as SHA-256 hashes: a leaked DB doesn't hand out
-//     usable signup codes.
+// Nothing here can decrypt mail. wrapped_key_* are blobs sealed with keys the
+// server never sees; recovery_auth_hash and password_auth_hash are hashes of a
+// *derived* auth key, split off by HKDF with a different info string than the
+// unwrap key. Invite codes are stored hashed, so a DB leak hands out nothing.
 import { Pool } from "pg";
 import { randomBytes, createHmac, createHash, timingSafeEqual } from "crypto";
 
@@ -148,12 +144,12 @@ function hashInvite(code: string): string {
   return createHash("sha256").update(code.trim()).digest("hex");
 }
 
-// Atomically claim one use of an invite code. Returns true if a slot was free.
+// Claim one use of an invite code. True if a slot was free.
 //
-// The guard lives in the UPDATE itself rather than a read-then-write: under READ
-// COMMITTED a second transaction targeting the same row blocks on the row lock,
-// then re-evaluates `use_count < max_uses` against the committed new value. So
-// two people racing for the last slot of a 10-use code can never both win.
+// The guard is in the UPDATE, not a read-then-write: under READ COMMITTED a
+// second transaction hitting the same row blocks on the row lock and then
+// re-evaluates use_count against the committed value, so two people racing for
+// the last slot of a 10-use code can't both win.
 export async function consumeInviteCode(code: string, usedBy: string): Promise<boolean> {
   await db();
   const r = await getPool().query(
@@ -193,10 +189,8 @@ export async function generateInviteCodes(count = 1, maxUses = 1): Promise<strin
   return codes;
 }
 
-// Undo a consume (used when account provisioning fails after the code was taken).
-// Hands back exactly the one slot this signup took — blanking the row instead
-// would refund every use of a multi-use code. used_at/used_by describe the most
-// recent successful use, so they only reset once the code is fully unused again.
+// Undo a consume, for when provisioning fails after the code was taken. Hands
+// back exactly one slot — blanking the row would refund a whole multi-use code.
 export async function releaseInviteCode(code: string): Promise<void> {
   await db();
   await getPool().query(
@@ -247,6 +241,74 @@ function toUser(r: Record<string, unknown>): UserRow {
   };
 }
 
+// Everything the server holds about one account, for the Settings export.
+//
+// Two things are deliberately left out and labelled as such in the file: the
+// internal Stalwart password (our credential, and it would hand over the
+// mailbox) and the TOTP secret (hand it over and anyone can mint their codes).
+// The wrapped_key_* blobs ARE included — they're the user's own key material and
+// stay useless without the recovery code.
+export async function getAccountExport(userId: string): Promise<Record<string, unknown>> {
+  await db();
+  const p = getPool();
+  const [user, creds, sessions, invites] = await Promise.all([
+    p.query(
+      `SELECT id, username, email, account_id, pgp_public_key, wrapped_key_recovery,
+              recovery_auth_hash, password_salt, password_auth_hash, wrapped_key_password,
+              (totp_secret_enc IS NOT NULL) AS has_totp, require_totp_on_login, created_at
+         FROM users WHERE id = $1`,
+      [userId]
+    ),
+    p.query(
+      `SELECT id, public_key, counter, transports, prf_capable, wrapped_key_prf,
+              nickname, is_original, created_at, last_used_at
+         FROM webauthn_credentials WHERE user_id = $1 ORDER BY created_at`,
+      [userId]
+    ),
+    // No jti: those are live bearer tokens, not something to write into a file.
+    p.query(
+      `SELECT created_at, expires_at FROM sessions WHERE user_id = $1 ORDER BY created_at`,
+      [userId]
+    ),
+    p.query(
+      `SELECT used_at FROM invite_codes WHERE used_by = (SELECT email FROM users WHERE id = $1)`,
+      [userId]
+    ),
+  ]);
+
+  return {
+    exportedAt: new Date().toISOString(),
+    note:
+      "Everything Hypamail's database holds about this account. Message contents are " +
+      "not here: they are stored encrypted and the server cannot read them. The internal " +
+      "mailbox password and the authenticator secret are withheld on purpose — both are " +
+      "live credentials.",
+    account: user.rows[0] ?? null,
+    passkeys: creds.rows,
+    sessions: sessions.rows,
+    inviteRedemptions: invites.rows,
+  };
+}
+
+// Erase the account. Credentials and sessions cascade off users(id); the invite
+// row keeps its spent count but loses the email that pointed back here.
+export async function deleteUser(userId: string, email: string): Promise<void> {
+  await db();
+  const client = await getPool().connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(`UPDATE invite_codes SET used_by = NULL WHERE used_by = $1`, [email]);
+    await client.query(`DELETE FROM auth_attempts WHERE ip_hash = $1`, [hashIp(`user:${userId}`)]);
+    await client.query(`DELETE FROM users WHERE id = $1`, [userId]);
+    await client.query("COMMIT");
+  } catch (e) {
+    await client.query("ROLLBACK");
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
 // Defaults to false for new accounts; toggled from Settings.
 export async function setRequireTotpOnLogin(userId: string, value: boolean): Promise<void> {
   await db();
@@ -269,11 +331,9 @@ export async function createUser(u: Omit<UserRow, "id" | "requireTotpOnLogin">):
 
 // ---------- optional password credential ----------
 
-// The salt has to be handed out before sign-in, so this is an unauthenticated
-// lookup. Returning nothing for an unknown username would turn it into a user
-// enumeration oracle, so absent accounts get a stable decoy derived from the
-// server secret — indistinguishable from a real salt, and identical on every
-// attempt, so probing can't separate "no such user" from "no password set".
+// Unauthenticated by necessity — the salt is needed before sign-in. Unknown
+// usernames get a stable decoy derived from the server secret, so this can't be
+// used to tell "no such user" from "no password set".
 export async function getPasswordSalt(username: string): Promise<string> {
   await db();
   const r = await getPool().query(

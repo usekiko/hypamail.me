@@ -214,16 +214,24 @@ export default function PrivacyPage() {
         <p>
           Under the GDPR you have the right to access your data, to have it corrected, to have it
           erased, to restrict or object to processing, to data portability, and to withdraw consent
-          where processing is based on it. To exercise any of these, write to{" "}
+          where processing is based on it.
+        </p>
+        <p>
+          Two of these you can exercise yourself, immediately, without asking us. In{" "}
+          <strong className="text-foreground">Settings</strong> you can download everything our
+          database holds about your account as a JSON file, and you can delete your account outright
+          — which erases the mailbox, its messages, your passkeys and your account record. For
+          anything else, or if you would rather we did it, write to{" "}
           <strong className="text-foreground">usekiko@hypamail.me</strong> (or{" "}
           <strong className="text-foreground">id4rp02s@gmail.com</strong> if you get no reply). We
           will respond within one month, as Article 12(3) requires.
         </p>
         <p>
-          One honest limitation on the right of access and to portability: we can export the data we
-          hold about you, but for your mail that export is ciphertext. We cannot decrypt it, so a
-          readable copy has to be produced from your own signed-in session, where your key is
-          available.
+          One honest limitation on the right of access and to portability: the export covers the
+          data we hold, which does not include readable mail. Your messages are ciphertext to us and
+          we cannot decrypt them, so a readable copy has to be produced from your own signed-in
+          session, where your key is available. For the same reason, deleting your account destroys
+          your mail permanently — we hold no key that could bring it back.
         </p>
         <p>
           You also have the right to lodge a complaint with a supervisory authority, in the EU

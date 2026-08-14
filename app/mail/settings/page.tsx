@@ -5,6 +5,8 @@ import { useCallback, useEffect, useState } from "react";
 import { listPasskeys, setLoginTotpRequired } from "../../actions";
 import { deriveRecoveryAuthKey, recoveryWordsError } from "@/lib/client/crypto";
 import AuthenticatorCard from "./AuthenticatorCard";
+import DeleteAccountCard from "./DeleteAccountCard";
+import ExportCard from "./ExportCard";
 import PasskeysCard from "./PasskeysCard";
 import PasswordCard from "./PasswordCard";
 import TwoFactorCard from "./TwoFactorCard";
@@ -17,6 +19,7 @@ export default function SettingsPage() {
   const [requireTotp, setRequireTotp] = useState(false);
   const [hasTotp, setHasTotp] = useState(false);
   const [hasPassword, setHasPassword] = useState(false);
+  const [username, setUsername] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode>({ kind: "view" });
   const [words, setWords] = useState("");
   const [totpCode, setTotpCode] = useState("");
@@ -32,6 +35,7 @@ export default function SettingsPage() {
       setRequireTotp(!!res.requireTotpOnLogin);
       setHasTotp(!!res.hasTotp);
       setHasPassword(!!res.hasPassword);
+      setUsername(res.username ?? null);
     }
   }, []);
 
@@ -166,6 +170,10 @@ export default function SettingsPage() {
       )}
 
       <PasswordCard hasPassword={hasPassword} hasTotp={hasTotp} onChanged={reload} />
+
+      <ExportCard hasTotp={hasTotp} />
+
+      <DeleteAccountCard username={username} hasTotp={hasTotp} />
     </div>
   );
 }

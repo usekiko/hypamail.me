@@ -26,3 +26,5 @@ export {
   removeAccountPassword,
   logoutAction,
 } from "./account";
+
+export { exportAccountData, deleteAccountForever } from "./data";
