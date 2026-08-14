@@ -1,6 +1,4 @@
-// Pitch-black / HeroUI-token auth shell, shared by login, signup, recover and
-// login/legacy. Separate from components/auth-panel.tsx (which is shared with
-// hypastack) rather than a variant prop on it.
+// Pitch-black auth shell, shared by login, signup, recover and login/legacy.
 import LoadingCover from "./LoadingCover";
 
 /** Centred column: logo, heading, and the form itself. */
