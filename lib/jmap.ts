@@ -1,10 +1,7 @@
-// JMAP client for Stalwart. Runs server-side only (talks to the localhost
-// listener on the VPS). User mail access uses the user's own internal Basic
-// credentials; provisioning uses the admin credentials (see lib/admin.ts).
-//
-// Zero-access note: this module only ever handles message *metadata* (headers,
-// which Stalwart keeps in cleartext) and opaque encrypted blobs. Message bodies
-// are PGP ciphertext that is decrypted in the user's browser — never here.
+// JMAP client for Stalwart, server-side only. Mail access uses the user's own
+// internal Basic credentials; provisioning uses the admin ones (lib/admin.ts).
+// Only touches headers (which Stalwart keeps cleartext) and opaque ciphertext —
+// bodies are decrypted in the browser, never here.
 
 const JMAP_URL = process.env.JMAP_URL || "http://127.0.0.1:8088";
 const USING_MAIL = ["urn:ietf:params:jmap:core", "urn:ietf:params:jmap:mail"];
@@ -38,10 +35,8 @@ export async function authenticate(email: string, password: string): Promise<str
   return session.primaryAccounts?.["urn:ietf:params:jmap:mail"] ?? null;
 }
 
-// Returns the inbox mailbox id (required) and the junk/spam mailbox id (if the
-// account has one). Burner-mail UX: we surface Junk *in* the inbox view rather
-// than hiding it, so flagged-but-wanted mail (signup confirmations, OTPs, etc.)
-// is never lost — just labelled. See listInbox / MailSummary.spam.
+// Inbox id, plus Junk if the account has one. Junk is shown *in* the inbox and
+// merely labelled, so a misflagged signup confirmation or OTP never disappears.
 async function inboxAndJunk(
   auth: string,
   accountId: string
@@ -65,12 +60,17 @@ export interface MailSummary {
   spam: boolean;
 }
 
+export const INBOX_PAGE = 50;
+
+// One page of the inbox, newest first, plus the full count so the caller knows
+// whether there's more behind it.
 export async function listInbox(
   email: string,
   password: string,
   accountId: string,
-  limit = 50
-): Promise<MailSummary[]> {
+  position = 0,
+  limit = INBOX_PAGE
+): Promise<{ mail: MailSummary[]; total: number; unread: number }> {
   const auth = basicAuth(email, password);
   const { inbox, junk } = await inboxAndJunk(auth, accountId);
   // Show Inbox + Junk together; tag Junk messages as spam instead of hiding them.
@@ -84,7 +84,9 @@ export async function listInbox(
         accountId,
         filter,
         sort: [{ property: "receivedAt", isAscending: false }],
+        position,
         limit,
+        calculateTotal: true,
       },
       "0",
     ],
@@ -97,9 +99,21 @@ export async function listInbox(
       },
       "1",
     ],
+    // Unread across the whole mailbox, not just this page — otherwise the count
+    // in the header would drift every time you loaded more.
+    [
+      "Email/query",
+      {
+        accountId,
+        filter: { operator: "AND", conditions: [filter, { notKeyword: "$seen" }] },
+        limit: 1,
+        calculateTotal: true,
+      },
+      "2",
+    ],
   ]);
   const list = (responses[1][1].list as Array<Record<string, unknown>>) || [];
-  return list.map((e) => ({
+  const mail = list.map((e) => ({
     id: e.id as string,
     from: (e.from as MailSummary["from"]) || [],
     subject: (e.subject as string) ?? null,
@@ -107,6 +121,11 @@ export async function listInbox(
     unread: !((e.keywords as Record<string, boolean>) || {})["$seen"],
     spam: junk ? !!((e.mailboxIds as Record<string, boolean>) || {})[junk] : false,
   }));
+  // Stalwart honours calculateTotal, but fall back to what we can see rather
+  // than reporting zero if a future backend ever skips it.
+  const total = (responses[0][1].total as number | undefined) ?? position + mail.length;
+  const unread = (responses[2][1].total as number | undefined) ?? mail.filter((m) => m.unread).length;
+  return { mail, total, unread };
 }
 
 export interface MailMeta extends MailSummary {

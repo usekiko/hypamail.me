@@ -3,10 +3,13 @@
 // The message list. Client-side because HeroUI's Table is react-aria's grid,
 // which needs the browser. RouterProvider is what keeps a row's href a Next
 // client-side navigation rather than a full document load.
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { RouterProvider } from "react-aria-components";
-import { Chip, Table } from "@heroui/react";
+import { Button, Chip, Table } from "@heroui/react";
+import { Alert } from "../ui/Alert";
 import type { MailSummary } from "@/lib/jmap";
+import { loadMoreInbox } from "./actions";
 
 // Two widths of the same timestamp: the narrow date column on a phone can't
 // hold "Aug 1, 2026", so it drops the year and the wider one is swapped in
@@ -31,8 +34,35 @@ function sender(m: MailSummary): string {
 
 const CELL = "px-2.5 sm:px-4";
 
-export default function InboxTable({ mail }: { mail: MailSummary[] }) {
+export default function InboxTable({
+  initialMail,
+  total,
+}: {
+  initialMail: MailSummary[];
+  total: number;
+}) {
   const router = useRouter();
+  const [mail, setMail] = useState(initialMail);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function loadMore() {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await loadMoreInbox(mail.length);
+      if (!res.mail) return setError(res.error || "Couldn't load more messages.");
+      // Dedupe by id: new mail arriving between pages shifts everything down by
+      // one, which would otherwise repeat the message on the seam.
+      setMail((prev) => {
+        const seen = new Set(prev.map((m) => m.id));
+        return [...prev, ...res.mail!.filter((m) => !seen.has(m.id))];
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <RouterProvider navigate={router.push}>
       <Table>
@@ -87,6 +117,23 @@ export default function InboxTable({ mail }: { mail: MailSummary[] }) {
           </Table.Content>
         </Table.ScrollContainer>
       </Table>
+
+      {error && (
+        <Alert tone="error" style={{ marginTop: 12, marginBottom: 0 }}>
+          {error}
+        </Alert>
+      )}
+
+      {mail.length < total && (
+        <div className="mt-4 flex items-center gap-3">
+          <Button variant="outline" size="sm" onPress={loadMore} isDisabled={busy}>
+            {busy ? "Loading…" : "Load more"}
+          </Button>
+          <span className="text-xs text-muted">
+            showing {mail.length} of {total}
+          </span>
+        </div>
+      )}
     </RouterProvider>
   );
 }
