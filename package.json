@@ -25,6 +25,7 @@
     "otpauth": "^9.5.1",
     "pg": "^8.13.1",
     "postal-mime": "^2.7.5",
+    "postprocessing": "^6.39.4",
     "qrcode": "^1.5.4",
     "react": "19.2.0",
     "react-aria": "^3.51.0",
