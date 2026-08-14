@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Button, InputGroup } from "@heroui/react";
+import { Button, InputGroup, TextArea, TextField } from "@heroui/react";
 import { Alert } from "../../ui/Alert";
 import { MIcon } from "@/components/ui/material-icon";
 import { sendMail } from "../../actions";
@@ -30,26 +30,6 @@ export default function ComposeForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [bodyFocused, setBodyFocused] = useState(false);
-
-  // The textarea isn't a HeroUI field, so it reads the same tokens by hand —
-  // otherwise it renders with a different radius and border to the InputGroups
-  // stacked above it.
-  const bodyStyle: React.CSSProperties = {
-    width: "100%",
-    minHeight: 300,
-    resize: "vertical",
-    background: "var(--field-background)",
-    border: "1px solid var(--border)",
-    borderRadius: "var(--field-radius)",
-    boxShadow: bodyFocused ? "0 0 0 2px var(--focus)" : undefined,
-    color: "var(--foreground)",
-    padding: "12px 14px",
-    fontFamily: "inherit",
-    fontSize: "14px",
-    lineHeight: 1.65,
-    outline: "none",
-  };
 
   const labelClass = "block text-sm font-medium mb-2 pl-1 text-foreground";
 
@@ -170,16 +150,9 @@ export default function ComposeForm({
             <label className={labelClass} htmlFor="body">
               Message
             </label>
-            <textarea
-              id="body"
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              onFocus={() => setBodyFocused(true)}
-              onBlur={() => setBodyFocused(false)}
-              disabled={busy}
-              placeholder="Write your message…"
-              style={bodyStyle}
-            />
+            <TextField value={body} onChange={setBody} isDisabled={busy} fullWidth>
+              <TextArea id="body" rows={14} placeholder="Write your message…" />
+            </TextField>
           </div>
 
           {error && <Alert tone="error" style={{ marginBottom: 0 }}>{error}</Alert>}
